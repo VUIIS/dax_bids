@@ -296,8 +296,6 @@ class Task(object):
 
         """
         jobnode = self.assessor.attrs.get('%s/jobnode' % self.atype)
-        if jobnode is None:
-            jobnode = 'NotFound'
         return jobnode.strip()
 
     def set_jobnode(self, jobnode):
@@ -384,8 +382,10 @@ class Task(object):
         self.undo_processing()
 
         # Delete the local copies
-        os.remove(os.path.join(self.upload_dir, local_zip))
-        shutil.rmtree(os.path.join(self.upload_dir, local_dir))
+        if os.path.isfile(local_zip):
+            os.remove(local_zip)
+        if os.path.isdir(local_dir):
+            shutil.rmtree(local_dir)
 
     def update_status(self):
         """
@@ -454,10 +454,8 @@ undo_processing...')
         :return: string of the jobid
 
         """
-        jobid = self.assessor.attrs.get('%s/jobid' % self.atype)
-        if jobid is None:
-            jobid = 'NotFound'
-        return jobid.strip()
+        jobid = self.assessor.attrs.get('%s/jobid' % self.atype).strip()
+        return jobid
 
     def get_job_status(self, jobid=None):
         """
@@ -502,8 +500,7 @@ undo_processing...')
         outlog_dir = os.path.dirname(outlog)
         mkdirp(outlog_dir)
         pbs = PBS(pbsfile, outlog, cmds, self.processor.walltime_str,
-                  self.processor.memreq_mb, self.processor.ppn,
-                  self.processor.env, job_email,
+                  self.processor.memreq_mb, self.processor.ppn, job_email,
                   job_email_options, xnat_host)
         pbs.write()
         if writeonly:
@@ -934,8 +931,6 @@ class ClusterTask(Task):
 
         """
         memused = self.get_attr('memused')
-        if memused is None:
-            memused = 'NotFound'
         return memused
 
     def set_memused(self, memused):
@@ -956,9 +951,6 @@ class ClusterTask(Task):
 
         """
         walltime = self.get_attr('walltimeused')
-        if walltime is None:
-            walltime = 'NotFound'
-
         return walltime
 
     def set_walltime(self, walltime):
@@ -1100,10 +1092,7 @@ class ClusterTask(Task):
         :return: String of the date that the job started in "%Y-%m-%d" format
 
         """
-        jobstartdate = self.get_attr('jobstartdate')
-        if jobstartdate is None:
-            jobstartdate = 'NULL'
-        return jobstartdate
+        return self.get_attr('jobstartdate')
 
     def set_jobstartdate(self, date_str):
         """
@@ -1341,14 +1330,20 @@ class ClusterTask(Task):
         dst = self.upload_pbs_dir()
         mkdirp(dst)
         LOGGER.debug('copying batch file from %s to %s' % (src, dst))
-        shutil.copy(src, dst)
+        try:
+            shutil.copy(src, dst)
+        except:
+            pass
 
         # Move output file
         src = self.outlog_path()
         dst = self.upload_outlog_dir()
         mkdirp(dst)
         LOGGER.debug('moving outlog file from %s to %s' % (src, dst))
-        shutil.move(src, dst)
+        try:
+            shutil.move(src, dst)
+        except:
+            pass
 
         # Touch file for dax_upload to check
         create_flag(os.path.join(RESULTS_DIR, self.assessor_label,
@@ -1365,14 +1360,20 @@ class ClusterTask(Task):
         dst = self.upload_pbs_dir()
         mkdirp(dst)
         LOGGER.debug('copying batch file from %s to %s' % (src, dst))
-        shutil.copy(src, dst)
+        try:
+            shutil.copy(src, dst)
+        except:
+            pass
 
         # Move output file
         src = self.outlog_path()
         dst = self.upload_outlog_dir()
         mkdirp(dst)
         LOGGER.debug('moving outlog file from %s to %s' % (src, dst))
-        shutil.move(src, dst)
+        try:
+            shutil.move(src, dst)
+        except:
+            pass
 
         # Touch file for dax_upload that job failed
         create_flag(os.path.join(RESULTS_DIR, self.assessor_label,
@@ -1388,14 +1389,14 @@ class ClusterTask(Task):
         try:
             os.remove(self.attr_path(attr))
         except OSError:
-            pass
+                pass
 
     def delete_batch(self):
         # Delete batch file
         try:
             os.remove(self.batch_path())
         except OSError:
-            pass
+                pass
 
     def delete(self):
         # Delete attributes
@@ -1541,7 +1542,6 @@ undo_processing...')
                         self.processor.walltime_str,
                         self.processor.memreq_mb,
                         self.processor.ppn,
-                        self.processor.env,
                         job_email,
                         job_email_options,
                         xnat_host)

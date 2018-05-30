@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/local/python_xnat/1.0/x86_64/gcc46/nonet/bin/python
 # -*- coding: utf-8 -*-
 
 """ Executables to manage project with REDCap
@@ -160,7 +160,9 @@ class Settings_File(object):
         # logs for dax path
         self.dax_logs_path = dax_logs_path
         # Maximum Number of job that can be submitted
-        if isinstance(queue_limit, basestring):
+        if not queue_limit: 
+            self.queue_limit = 400
+        elif isinstance(queue_limit, basestring):
             self.queue_limit = int(queue_limit)
         else:
             self.queue_limit = 400
@@ -390,7 +392,7 @@ def get_list_modproc(redcap_project):
     k = ''
     for k in fnames:
         try:
-            field = filter(lambda x: x['field_name'] == k, redcap_project.metadata)[0]
+            field = list(filter(lambda x: x['field_name'] == k, redcap_project.metadata))[0]
             all_forms.append(field['form_name'])
         except IndexError:
             LOGGER.error('IndexError when checking the libraries.',
@@ -420,7 +422,7 @@ def get_field_for_modproc(redcap_project, form_name):
     k = ''
     for k in fnames:
         try:
-            field = filter(lambda x: x['field_name'] == k, redcap_project.metadata)[0]
+            field = list(filter(lambda x: x['field_name'] == k, redcap_project.metadata))[0]
             if field['form_name'] == form_name and k not in avoid_labels:
                 fields_list.append(field)
         except IndexError:
@@ -981,6 +983,8 @@ def get_logfile_name(logdir, prefix, filepath):
     :return: path of the log file
     """
     if not os.path.exists(logdir):
+        LOGGER.info('HERE')
+        LOGGER.info(logdir)
         os.makedirs(logdir)
     project = os.path.basename(filepath).split('.')[0]
     now = '{:%Y%m%d_%H:%M:%S}'.format(datetime.now())

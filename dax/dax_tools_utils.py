@@ -303,7 +303,7 @@ xvfb-run --wait=5 \
 --server-args="-screen 0 1920x1200x24 -ac +extension GLX" \
 ${job_cmds}\n"""
 
-DEFAULT_SLURM_DICT = {'cmd_submit': 'sbatch',
+DEFAULT_SLURM_DICT = {'cmd_submit': '/data/mcr/slurm_commands/sbatch_retry',
                       'prefix_jobid': 'Submitted batch job ',
                       'suffix_jobid': '\n',
                       'cmd_count_nb_jobs': 'squeue -u masispider,vuiiscci \
@@ -500,21 +500,21 @@ def upload_tasks(logfile, debug, upload_settings=None,
 
     # Check if folders exist
     check_folders()
-    ##flagfile = "%s%s.txt" % (FLAGFILE_TEMPLATE, suffix)
+    flagfile = "%s%s.txt" % (FLAGFILE_TEMPLATE, suffix)
 
     # Load the settings for upload
-    #upload_settings = load_upload_settings(upload_settings, host, username,
-    #                                       password, projects)
-    #print_upload_settings(upload_settings)
+    upload_settings = load_upload_settings(upload_settings, host, username,
+                                           password, projects)
+    print_upload_settings(upload_settings)
     # create the flag file showing that the spider is running
-    ##if is_dax_upload_running(flagfile):
-    ##    pass
-    ##else:
-    ##    try:
-    #upload_results(upload_settings, emailaddress)
-    ##    finally:
+    if is_dax_upload_running(flagfile):
+        pass
+    else:
+        try:
+            upload_results(upload_settings, emailaddress)
+        finally:
             # remove flagfile
-    ##        os.remove(flagfile)
+            os.remove(flagfile)
 
 
 def testing(test_file, project, sessions, host=None, username=None, hide=False,
@@ -812,6 +812,9 @@ def generate_snapshots(assessor_path):
     snapshot_dir = os.path.join(assessor_path, 'SNAPSHOTS')
     snapshot_original = os.path.join(snapshot_dir, SNAPSHOTS_ORIGINAL)
     snapshot_preview = os.path.join(snapshot_dir, SNAPSHOTS_PREVIEW)
+    LOGGER.debug(snapshot_original)
+    LOGGER.debug(os.path.exists(snapshot_original))
+    LOGGER.debug(os.path.exists(os.path.join(assessor_path, 'PDF')))
     if not os.path.exists(snapshot_original) and\
        os.path.exists(os.path.join(assessor_path, 'PDF')):
         LOGGER.debug('    +creating original of SNAPSHOTS')
@@ -820,6 +823,7 @@ def generate_snapshots(assessor_path):
         # Make the snapshots for the assessors with ghostscript
         cmd = GS_CMD.format(original=snapshot_original,
                             assessor_path=assessor_path)
+        LOGGER.debug(cmd)
         os.system(cmd)
     # Create the preview snapshot from the original if Snapshots exist :
     if os.path.exists(snapshot_original):
@@ -827,6 +831,7 @@ def generate_snapshots(assessor_path):
         # Make the snapshot_thumbnail
         cmd = CONVERT_CMD.format(original=snapshot_original,
                                  preview=snapshot_preview)
+        LOGGER.debug(cmd)
         os.system(cmd)
 
 
@@ -848,13 +853,13 @@ def copy_outlog(assessor_dict):
 
 def get_xsitype(assessor_dict):
     """
-    Copy the outlog files to the assessor folder if we are uploading.
+    Copy the oulog files to the assessor folder if we are uploading.
 
     :param assessor_dict: dictionary for the assessor
     :return: xsitype for the assessor_dict
     """
     proctype = assessor_dict['proctype']
-    if proctype == 'FS':
+    if proctype.startswith('FS') and not proctype.startswith('FSL'):
         return DEFAULT_FS_DATATYPE
     else:
         return DEFAULT_DATATYPE
@@ -1000,15 +1005,26 @@ unable to find XML file: %s'
             ctask = ClusterTask(assessor_dict['label'], RESULTS_DIR, DISKQ_DIR)
 
             # Set on XNAT
-            assessor_obj.attrs.mset({
-                xsitype + '/procstatus': ctask.get_status(),
-                xsitype + '/validation/status': NEEDS_QA,
-                xsitype + '/jobid': ctask.get_jobid(),
-                xsitype + '/jobnode': ctask.get_jobnode(),
-                xsitype + '/memused': ctask.get_memused(),
-                xsitype + '/walltimeused': ctask.get_walltime(),
-                xsitype + '/jobstartdate': ctask.get_jobstartdate()
-            })
+            try:
+                assessor_obj.attrs.mset({
+                    xsitype + '/procstatus': ctask.get_status(),
+                    xsitype + '/validation/status': NEEDS_QA,
+                    xsitype + '/jobid': ctask.get_jobid(),
+                    xsitype + '/jobnode': ctask.get_jobnode(),
+                    xsitype + '/memused': ctask.get_memused(),
+                    xsitype + '/walltimeused': ctask.get_walltime(),
+                    xsitype + '/jobstartdate': ctask.get_jobstartdate()
+                })
+            except:
+                assessor_obj.attrs.mset({
+                    xsitype + '/procstatus': ctask.get_status(),
+                    xsitype + '/validation/status': NEEDS_QA,
+                    xsitype + '/jobid': 'N/A',
+                    xsitype + '/jobnode': 'N/A',
+                    xsitype + '/memused': 'N/A',
+                    xsitype + '/walltimeused': 'N/A',
+                    xsitype + '/2000-01-01': 'N/A'
+                })
 
             # Delete the task from diskq
             ctask.delete()
@@ -1057,11 +1073,14 @@ def upload_resource(assessor_obj, resource, resource_path):
         # One or two file, let just upload them:
         else:
             fpath = os.path.join(resource_path, rfiles_list[0])
-            try:
-                XnatUtils.upload_file_to_obj(
-                    fpath, assessor_obj.out_resource(resource), removeall=True)
-            except XnatUtilsError as err:
-                print(ERR_MSG % err)
+            if os.stat(fpath).st_size != 0:
+                try:
+                    XnatUtils.upload_file_to_obj(
+                        fpath, assessor_obj.out_resource(resource), removeall=True)
+                except XnatUtilsError as err:
+                    print(ERR_MSG % err)
+            else: 
+                LOGGER.debug('ZERO size file found:' + fpath)
 
 
 def upload_snapshots(assessor_obj, resource_path):
@@ -1082,6 +1101,7 @@ def upload_snapshots(assessor_obj, resource_path):
             assessor_obj, original, thumbnail)
     except XnatUtilsError as err:
         print(ERR_MSG % err)
+        status = False
 
     if status:
         os.remove(original)

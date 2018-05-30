@@ -73,7 +73,7 @@ class Launcher(object):
                  priority_project=None,
                  queue_limit=DAX_SETTINGS.get_queue_limit(),
                  root_job_dir=DAX_SETTINGS.get_root_job_dir(),
-                 xnat_user=None, xnat_pass=None, xnat_host=None, cr=None,
+                 xnat_user=None, xnat_pass=None, xnat_host=None,
                  job_email=None, job_email_options='bae', max_age=7,
                  launcher_type=DAX_SETTINGS.get_launcher_type(),
                  skip_lastupdate=None):
@@ -87,7 +87,6 @@ class Launcher(object):
         :param queue_limit: maximum number of jobs in the queue
         :param root_job_dir: root directory for jobs
         :param xnat_host: XNAT Host url. By default, use env variable.
-        :param cr: True if the host is an XNAT CR instance (will default to False if not specified)
         :param xnat_user: XNAT User ID. By default, use env variable.
         :param xnat_pass: XNAT Password. By default, use env variable.
         :param job_email: job email address for report
@@ -167,15 +166,6 @@ name as a key and list of yaml filepaths as values.'
         self.xnat_host = xnat_host
         if not self.xnat_host:
             self.xnat_host = os.environ['XNAT_HOST']
-
-        # CR flag: don't want something like 'cr: blah blah' in the settings file turning the cr flag on
-        if str(cr).upper()=='TRUE': 
-            self.cr=True
-        else:
-            self.cr=False
-
-        LOGGER.info('XNAT CR status: cr=%s, self.cr=%s'%(str(cr),str(self.cr)))
-    
         # User:
         if not xnat_user:
             netrc_obj = DAX_Netrc()
@@ -227,7 +217,7 @@ name as a key and list of yaml filepaths as values.'
             LOGGER.info(msg % os.path.join(res_dir, 'DISKQ'))
             task_list = load_task_queue(
                 status=task.NEED_TO_RUN,
-                proj_filter=list(set(self.project_process_dict.keys()+self.project_modules_dict.keys())))
+                proj_filter=list(self.project_process_dict.keys()))
 
             msg = '%s tasks that need to be launched found'
             LOGGER.info(msg % str(len(task_list)))
@@ -519,41 +509,41 @@ cluster queue"
 
         # Update each session from the list:
         for sess_info in sessions:
-            if not self.skip_lastupdate and not has_new and not sessions_local:
-                last_mod = datetime.strptime(sess_info['last_modified'][0:19],
-                                             UPDATE_FORMAT)
-                now_date = datetime.today()
-                last_up = self.get_lastupdated(sess_info)
-                if last_up is not None and \
-                   last_mod < last_up and \
-                   now_date < last_mod + timedelta(days=int(self.max_age)):
-                    mess = "  + Session %s: skipping, last_mod=%s,last_up=%s"
-                    mess_str = mess % (sess_info['label'], str(last_mod),
-                                       str(last_up))
-                    LOGGER.info(mess_str)
-                    continue
-
-            elif lastrun:
-                last_mod = datetime.strptime(sess_info['last_modified'][0:19],
-                                             UPDATE_FORMAT)
-                if last_mod < lastrun:
-                    mess = "  + Session %s:skipping not modified since last run,\
- last_mod=%s, last_run=%s"
-                    LOGGER.info(mess % (sess_info['label'], str(last_mod),
-                                        str(lastrun)))
-                    continue
-
-            elif lastmod_delta:
-                last_mod = datetime.strptime(sess_info['last_modified'][0:19],
-                                             UPDATE_FORMAT)
-                now_date = datetime.today()
-                if now_date > last_mod + lastmod_delta:
-                    mess = "  + Session %s:skipping not modified within delta,\
- last_mod=%s"
-                    LOGGER.info(mess % (sess_info['label'], str(last_mod)))
-                    continue
-                else:
-                    LOGGER.info('lastmod = %s' % str(last_mod))
+#            if not self.skip_lastupdate and not has_new and not sessions_local:
+#                last_mod = datetime.strptime(sess_info['last_modified'][0:19],
+#                                             UPDATE_FORMAT)
+#                now_date = datetime.today()
+#                last_up = self.get_lastupdated(sess_info)
+#                if last_up is not None and \
+#                   last_mod < last_up and \
+#                   now_date < last_mod + timedelta(days=int(self.max_age)):
+#                    mess = "  + Session %s: skipping, last_mod=%s,last_up=%s"
+#                    mess_str = mess % (sess_info['label'], str(last_mod),
+#                                       str(last_up))
+#                    LOGGER.info(mess_str)
+#                    continue
+#
+#            elif lastrun:
+#                last_mod = datetime.strptime(sess_info['last_modified'][0:19],
+#                                             UPDATE_FORMAT)
+#                if last_mod < lastrun:
+#                    mess = "  + Session %s:skipping not modified since last run,\
+# last_mod=%s, last_run=%s"
+#                    LOGGER.info(mess % (sess_info['label'], str(last_mod),
+#                                        str(lastrun)))
+#                    continue
+#
+#            elif lastmod_delta:
+#                last_mod = datetime.strptime(sess_info['last_modified'][0:19],
+#                                             UPDATE_FORMAT)
+#                now_date = datetime.today()
+#                if now_date > last_mod + lastmod_delta:
+#                    mess = "  + Session %s:skipping not modified within delta,\
+# last_mod=%s"
+#                    LOGGER.info(mess % (sess_info['label'], str(last_mod)))
+#                    continue
+#                else:
+#                    LOGGER.info('lastmod = %s' % str(last_mod))
 
             mess = "  + Session %s: building..."
             LOGGER.info(mess % sess_info['label'])
@@ -573,7 +563,7 @@ cluster queue"
 
             try:
                 if not self.skip_lastupdate:
-                    self.set_session_lastupdated(xnat, self.cr, sess_info,
+                    self.set_session_lastupdated(xnat, sess_info,
                                                  update_start_time)
             except Exception as E:
                 err1 = 'Caught exception setting session timestamp %s'
@@ -664,7 +654,11 @@ cluster queue"
                 if p_assr is None or \
                    p_assr.info()['procstatus'] == task.NEED_INPUTS or \
                    p_assr.info()['qcstatus'] in [task.RERUN, task.REPROC]:
+                    print('HERE')
+                    print(assr_name)
                     assessor = csess.full_object().assessor(assr_name)
+                    print(assessor)
+                    print(assessor.label())
                     xtask = XnatTask(sess_proc, assessor, res_dir,
                                      os.path.join(res_dir, 'DISKQ'))
 
@@ -1154,12 +1148,11 @@ The project is not part of the settings."""
             return datetime.strptime(update_time, UPDATE_FORMAT)
 
     @staticmethod
-    def set_session_lastupdated(xnat, cr, sess_info, update_start_time):
+    def set_session_lastupdated(xnat, sess_info, update_start_time):
         """
         Set the last session update on XNAT
 
         :param xnat: pyxnat.Interface object
-        :param cr: True if the host is an XNAT CR instance
         :param sess_info: dictionary of session information
         :param update_start_time: date when the update started
         :return: False if the session change(don't set the last update date),
@@ -1182,11 +1175,8 @@ The project is not part of the settings."""
         deg = 'setting last_updated for: %s to %s'
         LOGGER.debug(deg % (sess_info['label'], update_str))
         try:
-            if cr:
-                LOGGER.critical('CR does not seem to allow changing of session timestamp, what do we do?')
-            else:
-                sess_obj.attrs.set('%s/original' % xsi_type,
-                               UPDATE_PREFIX + update_str, params={"event_reason": "DAX setting session_lastupdated"})
+            sess_obj.attrs.set('%s/original' % xsi_type,
+                               UPDATE_PREFIX + update_str)
         except Exception as E:
             err1 = 'Caught exception setting update timestamp for session %s'
             err2 = 'Exception class %s caught with message %s'
@@ -1229,6 +1219,7 @@ def load_task_queue(status=None, proj_filter=None):
 
     for t in os.listdir(os.path.join(diskq_dir, 'BATCH')):
         # TODO:complete filtering by project/subject/session/type
+        print t
         if proj_filter:
             assr = XnatUtils.AssessorHandler(t)
             if assr.get_project_id() not in proj_filter:

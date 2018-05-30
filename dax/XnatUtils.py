@@ -628,6 +628,8 @@ Wrong label.'
         f_obj.write(self.version)
         f_obj.close()
         # Finish the folder
+        self.print_msg('self.error: ' + str(self.error))
+        self.print_msg('self.has_pdf: ' + str(self.has_pdf))
         if not self.error and self.has_pdf:
             self.print_msg('INFO: Job ready to be upload, error: %s'
                            % str(self.error))
@@ -682,7 +684,7 @@ def get_proctype(spider, suffix=None):
         ptype = re.split('/*_v[0-9]/*', spider)[0]
         proctype = '%s_v%s' % (ptype, version.split('.')[0])
 
-    if suffix:
+    if suffix is not None and len(suffix) > 0:
         if suffix[0] != '_':
             suffix = '_{}'.format(suffix)
         suffix = re.sub('[^a-zA-Z0-9]', '_', suffix)
@@ -1131,8 +1133,8 @@ def list_assessors(intf, projectid, subjectid, sessionid):
             anew['project_id'] = projectid
             anew['project_label'] = projectid
             anew['subject_id'] = asse['xnat:imagesessiondata/subject_id']
-            anew['session_id'] = asse['xnat:imagesessiondata/id']
-            anew['session_label'] = asse['xnat:imagesessiondata/label']
+            anew['session_id'] = asse['session_ID']
+            anew['session_label'] = asse['session_label']
             anew['procstatus'] = asse['%s/procstatus' % pfix]
             anew['proctype'] = asse['%s/proctype' % pfix]
             anew['qcstatus'] = asse['%s/validation/status' % pfix]
@@ -1358,8 +1360,8 @@ def get_full_object(intf, obj_dict):
     """
     if 'scan_id' in obj_dict:
         xpath = C_XPATH.format(project=obj_dict['project_id'],
-                               subject=obj_dict['subject_label'],
-                               session=obj_dict['session_label'],
+                               subject=obj_dict['subject_id'],
+                               session=obj_dict['session_id'],
                                scan=obj_dict['scan_id'])
     elif 'xsiType' in obj_dict and \
          obj_dict['xsiType'] in [DEFAULT_FS_DATATYPE, DEFAULT_DATATYPE]:
@@ -1942,8 +1944,16 @@ def download_files_from_obj(directory, resource_obj):
     check_dl_inputs(directory, resource_obj, 'download_files_from_obj')
     resource_obj.get(directory, extract=True)
     resource_dir = os.path.join(directory, resource_obj.label())
-    for root, _, filenames in os.walk(resource_dir):
+
+    mv_cmd = 'mv ' + os.path.join(resource_dir,'*') + ' ' + directory
+    print(mv_cmd)
+    os.system(mv_cmd) 
+    os.rmdir(resource_dir)
+
+    for root, _, filenames in os.walk(directory):
         fpaths.extend([os.path.join(root, filename) for filename in filenames])
+
+    print(fpaths)
 
     return fpaths
 
@@ -2213,7 +2223,7 @@ def upload_file_to_obj(filepath, resource_obj, remove=False, removeall=False,
                 print("WARNING: upload_file_to_obj in XnatUtils: resource %s \
 already exists." % filename)
                 return False
-        resource_obj.file(str(filename)).put(str(filepath), overwrite=True, params={"event_reason": "DAX uploading file"})
+        resource_obj.file(str(filename)).put(str(filepath), overwrite=True)
         return True
 
 
@@ -2253,6 +2263,7 @@ def upload_files_to_obj(filepaths, resource_obj, remove=False,
                         removeall=False):
     """
     Upload a list of files to a resource on XNAT
+
     :param filepaths: list of files to upload
     :param resource_obj: pyxnat EObject to upload all of the files to
     :param remove: remove files that already exist for the resource.
@@ -2463,11 +2474,11 @@ def upload_assessor_snapshots(assessor_obj, original, thumbnail):
     assessor_obj.out_resource('SNAPSHOTS')\
                 .file(os.path.basename(thumbnail))\
                 .put(thumbnail, thumbnail.split('.')[1].upper(), 'THUMBNAIL',
-                     overwrite=True, params={"event_reason": "DAX uploading file"})
+                     overwrite=True)
     assessor_obj.out_resource('SNAPSHOTS')\
                 .file(os.path.basename(original))\
                 .put(original, original.split('.')[1].upper(), 'ORIGINAL',
-                     overwrite=True, params={"event_reason": "DAX uploading file"})
+                     overwrite=True)
     return True
 
 
@@ -2629,8 +2640,9 @@ def makedir(directory, prefix='TempDir', subdir=True):
         os.mkdir(directory)
     else:
         if subdir:
-            ts = time.time()
-            ftime = str(ts).replace('.','_')
+            today = datetime.now()
+            ftime = '%s_%s_%s' % (str(today.year), str(today.month),
+                                  str(today.day))
             directory = os.path.join(directory, '%s_%s' % (prefix, ftime))
             if not os.path.exists(directory):
                 os.mkdir(directory)

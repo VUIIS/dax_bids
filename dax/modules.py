@@ -101,8 +101,8 @@ class Module(object):
                 self.directory = '%s_%s' % (self.directory.rstrip('/'), suffix)
 
         # Check if the directory exists
-        if not os.path.exists(self.directory):
-            os.mkdir(self.directory)
+        if not os.path.isdir(self.directory):
+            os.makedirs(self.directory)
         else:
             if suffix:
                 self.clean_directory()

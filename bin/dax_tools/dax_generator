@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/local/python_xnat/1.0/x86_64/gcc46/nonet/bin/python
 # -*- coding: utf-8 -*-
 
 """
@@ -857,7 +857,6 @@ attrs:
   walltime: 01:00:00
   memory: 3850
   ppn: 4
-  env: # Environment file to source
   type: # session or scan
   #if type = scan, you need to add scan_nb pointing to one scan
   #scan_nb: scan1

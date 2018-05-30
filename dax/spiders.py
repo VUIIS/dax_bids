@@ -1002,6 +1002,7 @@ class AutoSpider(object):
             for i, src in enumerate(src_list):
                 input_name = '%s_%s' % (_input, str(i))
                 dst = self.copy_input(src, input_name)
+                print(dst)
                 if not dst:
                     self.time_writer('ERROR: copying inputs')
                     return None
@@ -1009,7 +1010,10 @@ class AutoSpider(object):
                     dst_list.append(dst)
 
             # Build new comma-separated list with local paths
-            self.run_inputs[_input] = ','.join(dst_list)
+            if type(dst_list[0]) == list:
+                self.run_inputs[_input] = os.path.dirname(dst_list[0][0])
+            else:
+                self.run_inputs[_input] = ','.join(dst_list)
 
         return self.run_inputs
 
@@ -1184,7 +1188,6 @@ GeneratorAutoSpider.')
         if '/files/' in src:
             # Handle file
             _res, _file = src.split('/files/')
-            _file = os.path.basename(_file)
             dst = os.path.join(dst_dir, _file)
 
             self.time_writer(' - downloading from XNAT: %s to %s' % (src, dst))
@@ -1203,6 +1206,7 @@ GeneratorAutoSpider.')
             self.time_writer(' - downloading from XNAT: %s to %s'
                              % (src, dst_dir))
             result = self.download_xnat_resource(src, dst_dir)
+            print(result)
             return result
 
         else:
@@ -1243,8 +1247,12 @@ wrong for XNAT. Please check https://wiki.xnat.org/display/XNAT16/\
 XNAT+REST+API+Directory for the path.'
                 raise AutoSpiderError(msg % src)
             try:
+                if not os.path.isdir(os.path.dirname(dst)):
+                    os.makedirs(os.path.dirname(dst))
                 results = res.file(_file).get(dst)
             except Exception:
+                import traceback
+                traceback.print_exc()
                 raise AutoSpiderError('downloading files from XNAT failed.')
 
         return results
