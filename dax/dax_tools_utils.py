@@ -303,7 +303,7 @@ xvfb-run --wait=5 \
 --server-args="-screen 0 1920x1200x24 -ac +extension GLX" \
 ${job_cmds}\n"""
 
-DEFAULT_SLURM_DICT = {'cmd_submit': 'sbatch',
+DEFAULT_SLURM_DICT = {'cmd_submit': '/data/mcr/slurm_commands/sbatch_retry',
                       'prefix_jobid': 'Submitted batch job ',
                       'suffix_jobid': '\n',
                       'cmd_count_nb_jobs': 'squeue -u masispider,vuiiscci \
