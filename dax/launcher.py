@@ -299,6 +299,15 @@ cluster queue"
                 msg = '  +Launching job:%s, currently %s jobs in cluster queue'
                 LOGGER.info(msg % (cur_task.assessor_label, str(cjobs)))
 
+                # Get processor version
+                masimatlab_version = subprocess.check_output('svn info /data/mcr/masimatlab | grep "Last Changed Rev" | awk -F \':\' \'{print $2}\'', stderr=subprocess.STDOUT, shell=True).strip()
+                LOGGER.info('masimatlab version: ' + masimatlab_version)
+                proj = cur_task.assessor_label.split('-x-')[0]
+                subj = cur_task.assessor_label.split('-x-')[1]
+                sess = cur_task.assessor_label.split('-x-')[2]
+                xnat = XnatUtils.get_interface()
+                assessor = xnat.select('/projects/' + proj + '/subjects/' + subj + '/experiments/' + sess + '/assessors/' + cur_task.assessor_label)
+                assessor.attrs.mset({'proc:genprocdata/Note':'masimatlab version: ' + masimatlab_version})
             try:
                 if self.launcher_type in ['diskq-cluster',
                                           'diskq-combined']:
