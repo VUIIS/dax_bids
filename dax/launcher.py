@@ -14,6 +14,7 @@ import redcap
 import sys
 import os
 import traceback
+import subprocess
 
 from . import processors, modules, XnatUtils, task, cluster
 from .task import Task, ClusterTask, XnatTask
