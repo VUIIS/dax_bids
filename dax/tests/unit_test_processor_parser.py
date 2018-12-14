@@ -487,8 +487,39 @@ class ProcessorParserUnitTests(TestCase):
                                           processor_yaml,
                                           expected=None):
 
-        csess = [TestSession().OldInit(proj, subj, sess, scan_contents,
-                                      assessor_contents)]
+        projs = {}
+        for s in scan_contents:
+            subjs = projs.get(s[0], dict())
+            sesses = subjs.get(s[1], dict())
+            sess = sesses.get(s[2], ([], []))
+            sess[0].append(s)
+            sesses[s[2]] = sess
+            subjs[s[1]] = sesses
+            projs[s[0]] = subjs
+
+        for a in assessor_contents:
+            subjs = projs.get(a[0], dict())
+            sesses = subjs.get(a[1], dict())
+            sess = sesses.get(a[2], ([], []))
+            sess[1].append(a)
+            sesses[a[2]] = sess
+            subjs[a[1]] = sesses
+            projs[a[0]] = subjs
+
+        if len(projs) > 1:
+            self.assertFalse(True, "__run_processor_parser_unit_tests expects only a single project")
+
+        if len(projs.values()[0]) > 1:
+            self.assertFalse(True, "__run_processor_parser_unit_tests expects only a single subject")
+
+        csesses = []
+        for pk, pv in projs.iteritems():
+            for sk, sv in pv.iteritems():
+                for ek, ev in sv.iteritems():
+                    csesses.append(TestSession().OldInit(pk, sk, ek, ev[0], ev[1]))
+
+        # csess = [TestSession().OldInit(a[0], a[1], a[2], scan_contents,
+        #                               assessor_contents)]
 
         doc = yaml.load((StringIO.StringIO(processor_yaml)))
 
@@ -502,11 +533,11 @@ class ProcessorParserUnitTests(TestCase):
         print "iteration_map =", iteration_map
         print "prior_session_count =", prior_session_count
 
-        artefacts = ProcessorParser.parse_artefacts(csess)
+        artefacts = ProcessorParser.parse_artefacts(csesses)
         print "artefacts =", artefacts
 
         artefacts_by_input = \
-            ProcessorParser.map_artefacts_to_inputs(csess, inputs, inputs_by_type)
+            ProcessorParser.map_artefacts_to_inputs(csesses, inputs, inputs_by_type)
         print "artefacts_by_input =", artefacts_by_input
 
         # variables_to_inputs = \
@@ -520,7 +551,7 @@ class ProcessorParserUnitTests(TestCase):
         print "parameter_matrix =", parameter_matrix
 
         assessor_parameter_map = \
-            ProcessorParser.compare_to_existing(csess,
+            ProcessorParser.compare_to_existing(csesses,
                                                 'proc2',
                                                 parameter_matrix)
         print "assessor_parameter_map = ", assessor_parameter_map
@@ -672,6 +703,61 @@ class ProcessorParserUnitTests(TestCase):
                                                expected)
 
 
+    def test_processor_parser_longitudinal_1(self):
+        xnat_longitudinal_study_scans_1 = [
+            ('proj1', 'subj1', 'sess1', "1", "T1", "usable", copy.deepcopy(scan_files)),
+            ('proj1', 'subj1', 'sess2', "2", "T1", "usable", copy.deepcopy(scan_files)),
+        ]
+        xnat_longitudinal_study_assessor_inputs_1 = {
+            'sess1/gifparc-asr1': {
+                'scan1': scan_path.format('proj1', 'subj1', 'sess1', '1')
+            },
+            'sess2/gifparc-asr1': {
+                'scan1': scan_path.format('proj1', 'subj1', 'sess1', '2')
+            }
+        }
+        xnat_longitudinal_study_gifparc_files_1 = {
+            ('BIAS_COR', 1), ('SEG', 1), ('LABELS', 1)
+        }
+        xnat_longitudinal_study_assessors_1 = [
+            ('proj1', 'subj1', 'sess1', "gifparc-asr1", "gifparc", "usable",
+             copy.deepcopy(xnat_longitudinal_study_gifparc_files_1),
+             xnat_longitudinal_study_assessor_inputs_1['sess1/gifparc-asr1']),
+            ('proj1', 'subj1', 'sess2', "gifparc-asr1", "gifparc", "usable",
+             copy.deepcopy(xnat_longitudinal_study_gifparc_files_1),
+             xnat_longitudinal_study_assessor_inputs_1['sess2/gifparc-asr1']),
+        ]
+        processor_yaml_priorwith = yamls.generate_yaml(
+            'piebsi',
+            scans=[],
+            assessors=[
+                {
+                    'name': 'resources0', 'types': 'gifparc',
+                    'select-session': 'prior-with(1)',
+                    'resources': [
+                        {'type': 'BIAS_COR', 'name': 'time0'},
+                        {'type': 'SEG', 'name': 'seg0'},
+                        {'type': 'LABELS', 'name': 'labels0'}
+                    ]
+                },
+                {
+                    'name': 'resources1', 'types': 'gifparc',
+                    'resources': [
+                        {'type': 'BIAS_COR', 'name': 'time1'},
+                        {'type': 'SEG', 'name': 'seg1'},
+                        {'type': 'LABELS', 'name': 'labels1'}
+                    ]
+                },
+            ]
+        )
+        expected = [
+            {'resources1': '/projects/proj1/subjects/subj1/experiments/sess2/assessors/gifparc-asr1',
+             'resources0': '/projects/proj1/subjects/subj1/experiments/sess1/assessors/gifparc-asr1'}
+        ]
+        self.__run_processor_parser_unit_tests(xnat_longitudinal_study_scans_1,
+                                               xnat_longitudinal_study_assessors_1,
+                                               processor_yaml_priorwith,
+                                               expected)
     @staticmethod
     def __generate_test_matrix(headers, values):
         table_values = itertools.product(*values)
