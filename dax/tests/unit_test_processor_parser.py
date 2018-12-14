@@ -116,6 +116,9 @@ class TestArtefact:
         else:
             raise RuntimeError('invalid artefact type')
 
+    def info(self):
+        return {'quality': self.quality_}
+
     def type(self):
         return self.artefact_type
 
