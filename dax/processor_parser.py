@@ -1,6 +1,7 @@
 
 import copy
 import itertools
+import json
 import logging
 import sys
 from collections import namedtuple
@@ -215,6 +216,7 @@ class ProcessorParser:
 
         return command_set
 
+
     def find_inputs(self, assr):
         assr_inputs = XnatUtils.get_assessor_inputs(assr)
         variable_set = {}
@@ -370,17 +372,18 @@ class ProcessorParser:
         return variable_set, input_list
 
 
-    @staticmethod
-    def _get_yaml_checker(version):
-        if version == '1':
-            return ProcessorParser.__check_yaml_v1
-        return None
+    # @staticmethod
+    # def _get_yaml_checker(version):
+    #     if version == '1':
+    #         return ProcessorParser.__check_yaml_v1
+    #     return None
 
 
     @staticmethod
     def _get_schema_dictionary(version):
         if version == '1':
             return ProcessorParser.__schema_dict_v1
+        return None
 
 
     @staticmethod
@@ -418,56 +421,59 @@ class ProcessorParser:
         return errors
 
 
-    @staticmethod
-    def __check_yaml_v1(log, yaml_source):
-
-        # TODO: BenM/asr_of_asr/finish this!
-        errors = []
-        schema_number = yaml_source.get('yaml_processor_version', None)
-        if schema_number != '0.1':
-            errors.append('Error: Invalid schema number {}'.format(schema_number))
-
-        if 'xnat' not in yaml_source:
-            errors.append('Error: Missing xnat section')
-        xnat_section = yaml_source['xnat']
-
-        scan_section = xnat_section.get('scans', {})
-        for s, i in enumerate(scan_section):
-            if 'name' not in s:
-                errors.append(missing_field_unnamed.format('scan', i, 'name'))
-            name = s['name']
-
-            if 'types' not in s:
-                errors.append(missing_field_named.format('scan', name, 'types'))
-
-            errors.extend(
-                ProcessorParser._check_valid_mode(
-                    'scan', name, 'select', select_namespace, s))
-
-            errors.extend(
-                ProcessorParser._check_valid_mode(
-                    'scan', name, 'select-session', select_session_namespace,s))
-
-            errors.extend(
-                ProcessorParser.__check_resources_yaml_v1('scan', name, s))
-
-        assr_section = xnat_section.get('assessors', {})
-        for a, i in enumerate(assr_section):
-
-            if 'name' not in a:
-                errors.append(missing_field_unnamed.format('scan', i, 'name'))
-            name = a['name']
-
-            if 'types' not in a:
-                errors.append(missing_field_named.format('scan', name, 'types'))
-
-            errors.extend(ProcessorParser._check_valid_mode('assessor', name,
-                'select', select_namespace, a))
-
-            errors.extend(ProcessorParser._check_valid_mode('assessor', name,
-                'select-session', select_session_namespace, a))
-
-            ProcessorParser.__check_resources_yaml_v1('assessor', name, a)
+    # @staticmethod
+    # def __check_yaml_v1(yaml_source):
+    #
+    #     # TODO: BenM/asr_of_asr/finish this!
+    #     errors = []
+    #     schema_number = yaml_source.get('yaml_processor_version', None)
+    #     if schema_number != '0.1':
+    #         errors.append('Error: Invalid schema number {}'.format(schema_number))
+    #
+    #     if 'xnat' not in yaml_source:
+    #         errors.append('Error: Missing xnat section')
+    #     xnat_section = yaml_source['xnat']
+    #
+    #     scan_section = xnat_section.get('scans', {})
+    #     for s, i in enumerate(scan_section):
+    #         if 'name' not in s:
+    #             errors.append(missing_field_unnamed.format('scan', i, 'name'))
+    #         name = s['name']
+    #
+    #         if 'types' not in s:
+    #             errors.append(missing_field_named.format('scan', name, 'types'))
+    #
+    #         errors.extend(
+    #             ProcessorParser._check_valid_mode(
+    #                 'scan', name, 'select', select_namespace, s))
+    #
+    #         errors.extend(
+    #             ProcessorParser._check_valid_mode(
+    #                 'scan', name, 'select-session', select_session_namespace,s))
+    #
+    #         errors.extend(
+    #             ProcessorParser.__check_resources_yaml_v1('scan', name, s))
+    #
+    #     assr_section = xnat_section.get('assessors', {})
+    #     for a, i in enumerate(assr_section):
+    #
+    #         if 'name' not in a:
+    #             errors.append(missing_field_unnamed.format('scan', i, 'name'))
+    #         name = a['name']
+    #
+    #         if 'types' not in a:
+    #             errors.append(missing_field_named.format('scan', name, 'types'))
+    #
+    #         errors.extend(ProcessorParser._check_valid_mode('assessor', name,
+    #             'select', select_namespace, a))
+    #
+    #         errors.extend(ProcessorParser._check_valid_mode('assessor', name,
+    #             'select-session', select_session_namespace, a))
+    #
+    #         ProcessorParser.__check_resources_yaml_v1('assessor', name, a)
+    #
+    #     for e in errors:
+    #         LOGGER.error(e)
 
 
     @staticmethod
@@ -908,6 +914,7 @@ class ProcessorParser:
 
             if inputs is None:
                 LOGGER.warn('skipping, inputs field is empty:' + casr.label())
+ #               ProcessorParser.set_inputs_if_unambiguous(casr, processor_type, parameter_matrix)
                 return None
 
             for pi, p in enumerate(parameter_matrix):
@@ -915,3 +922,17 @@ class ProcessorParser:
                     assessors[pi].append(casr)
 
         return zip(copy.deepcopy(parameter_matrix), assessors)
+
+
+    def patch_assessors(self):
+        assessors = [a for a in filter(lambda aa: aa.entity.type() == self.proctype, self.artefacts.values())]
+        for a in assessors:
+            assr = a.entity
+            if assr.get_inputs() is None:
+                LOGGER.info("Assessor '{}' is missing inputs. Attempting to patch")
+                print 'parameter_matrix =', self.parameter_matrix
+                if len(self.parameter_matrix) == 1:
+                    inputstr = json.dumps(self.parameter_matrix[0])
+                    assr_obj = assr.full_object()
+                    print inputstr
+                    assr.set_inputs(inputstr)

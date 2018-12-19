@@ -144,7 +144,7 @@ class DAX_Settings(object):
             self._print_error_as_warning('Missing header bracket detected. '
                                          'Please check your file.\n', MSHE)
 
-    def is_cluster_valid(self):
+    def is_cluster_valid(self, logger=None):
         """Check cluster section.
 
         :return: True if valid settings, False otherwise
@@ -153,12 +153,22 @@ class DAX_Settings(object):
             for option in FILES_OPTIONS:
                 file_path = self.config_parser.get('cluster', option)
                 if not file_path:
-                    sys.stdout.write('Warning: option \
-%s not set in settings.\n' % (option))
+                    message =\
+                        'option %s not set in settings.\n'.format(
+                            option)
+                    if logger:
+                        logger.error(message)
+                    else:
+                        sys.stdout.write('Error: ' + message)
                     return False
                 elif not os.path.isfile(file_path):
-                    sys.stdout.write('Warning: %s not found for option \
-%s in settings.\n' % (file_path, option))
+                    message =\
+                        '%s not found for option %s in settings.\n'.format(
+                            file_path, option)
+                    if logger:
+                        logger.error(message)
+                    else:
+                        sys.stdout.write('Error: ' + message)
                     return False
         else:
             return False

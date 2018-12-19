@@ -224,6 +224,24 @@ class ComponentTestBuild(TestCase):
             ComponentTestBuild._setup_scans(session, scan_descriptors)
 
 
+    def test_gif_parcellation_assessor_patch_scenario(self):
+        intf = XnatUtils.get_interface(host=host)
+        proj_id = 'proj1'
+        subj_id = 'subj1'
+        sess_id = 'sess1'
+        session = intf.select_experiment(proj_id, subj_id, sess_id)
+        if not session.exists():
+            self.assertTrue(False, "no such session")
+
+        scan_descriptors = [('1', 't1')]
+        ComponentTestBuild._setup_scans(session, scan_descriptors)
+
+        SessionTools.add_assessor(session,
+                                  'proc1-x-subj1-x-sess1-x-1-Proc_X_v1',
+                                  assessor_presets['Proc_X_v1'],
+                                  'no_inputs')
+
+
     def test_clean_scans_from_test_session(self):
         proj_id = 'proj1'
         subj_id = 'subj1'
@@ -252,6 +270,8 @@ class ComponentTestBuild(TestCase):
             for asr in session.assessors():
                 print assessor_utils.full_label_from_assessor(asr)
                 asr.delete()
+
+
 
 
     # TODO: the text matrix that we run at the component level should be only

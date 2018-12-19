@@ -3583,6 +3583,11 @@ class CachedImageAssessor(object):
         return parse_assessor_inputs(self.get('proc:inputs'))
 
 
+    def set_inputs(self, inputs):
+        full = self.full_object()
+        full.attrs.set(full.datatype() + '/inputs', inputs)
+
+
     def in_resources(self):
         """
         Get a list of CachedResource objects for "in" type
