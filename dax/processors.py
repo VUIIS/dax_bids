@@ -231,6 +231,32 @@ class Processor(object):
         return json.loads(
             XnatUtils.parse_assessor_inputs(assessor.attrs.get('inputs')))
 
+    def level(self):
+        """
+         Method to return what level the processor runs at. This should be one
+         of:
+         . 'scan'
+         . 'session'
+         . 'subject'
+         . 'project'
+
+         Note to developers: changes to the way that processors are built
+         should make this method obsolete, as in general, developers should
+         develop processors based of AutoProcessor rather than subclassing
+         Processor or its two descendants, ScanProcessor and SessionProcessor.
+         AutoProcessors use the processor parser, which is agnostic about
+         processor level.
+         This is part of a wider discussion about what it means for a processor
+         to generate assessors at a given 'level'. For example, longitudinal
+         processors can be thought of as generating subject level assessors, as
+         they look across multiple sessions, but actually they are generated
+         within session folders, as are session and scan level assessors.
+
+         :return: None unless the method is overridden to return a sensible
+         value.
+         """
+        return None
+
 
 class ScanProcessor(Processor):
     """ Scan Processor class for processor on a scan on XNAT """
@@ -368,6 +394,11 @@ class ScanProcessor(Processor):
             return False
 
 
+    def level(self):
+        return 'scan'
+
+
+
 class SessionProcessor(Processor):
     """ Session Processor class for processor on a session on XNAT """
     def __init__(self, walltime_str, memreq_mb, spider_path, version=None,
@@ -480,6 +511,10 @@ class SessionProcessor(Processor):
         session = csess.full_object()
         assessor = session.assessor(assessor_name)
         return task.Task(self, assessor, upload_dir)
+
+
+    def level(self):
+        return 'session'
 
 
 class AutoProcessor(Processor):
@@ -607,6 +642,9 @@ defined by yaml file {}'
 
         # Set template
         self.job_template = doc.get('jobtemplate', None)
+
+        self.level_ = self.attrs.get('type', None)
+
 
     def _check_default_keys(self, source_id, doc):
         """ Static method to raise error if key not found in dictionary from
@@ -768,6 +806,10 @@ defined by yaml file {}'
         commands.append(cmd)
 
         return commands
+
+
+    def level(self):
+        return self.level_
 
 
 class MoreAutoProcessor(AutoProcessor):

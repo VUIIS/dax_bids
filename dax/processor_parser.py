@@ -684,10 +684,10 @@ class ProcessorParser:
             parse(csess.scans(), artefacts)
             parse(csess.assessors(), artefacts)
 
-            LOGGER.info('inputs by assessor:')
-            for cassr in csess.assessors():
-                LOGGER.info(cassr.label())
-                LOGGER.info(str(cassr.get_inputs()))
+            # LOGGER.info('inputs by assessor:')
+            # for cassr in csess.assessors():
+            #     LOGGER.info(cassr.label())
+            #     LOGGER.info(str(cassr.get_inputs()))
         return artefacts
 
 
@@ -913,8 +913,6 @@ class ProcessorParser:
             inputs = casr.get_inputs()
 
             if inputs is None:
-                LOGGER.warn('skipping, inputs field is empty:' + casr.label())
- #               ProcessorParser.set_inputs_if_unambiguous(casr, processor_type, parameter_matrix)
                 return None
 
             for pi, p in enumerate(parameter_matrix):
@@ -925,14 +923,21 @@ class ProcessorParser:
 
 
     def patch_assessors(self):
-        assessors = [a for a in filter(lambda aa: aa.entity.type() == self.proctype, self.artefacts.values())]
-        for a in assessors:
-            assr = a.entity
-            if assr.get_inputs() is None:
-                LOGGER.info("Assessor '{}' is missing inputs. Attempting to patch")
-                print 'parameter_matrix =', self.parameter_matrix
-                if len(self.parameter_matrix) == 1:
-                    inputstr = json.dumps(self.parameter_matrix[0])
-                    assr_obj = assr.full_object()
-                    print inputstr
-                    assr.set_inputs(inputstr)
+        if len(self.parameter_matrix) > 0:
+            assessors = [a for a in filter(lambda aa: aa.entity.type() == self.proctype, self.artefacts.values())]
+            for a in assessors:
+                assr = a.entity
+                if assr.get_inputs() is None:
+                    LOGGER.info("Assessor '{}' is missing inputs. Attempting to patch".format(assr.label()))
+                    print 'parameter_matrix =', self.parameter_matrix
+                    if len(self.parameter_matrix) == 1:
+                        inputstr = json.dumps(self.parameter_matrix[0])
+                        LOGGER.info("Assigning inputs to assessor '{}'".format(assr.label()))
+                        LOGGER.info("    Inputs: {}".format(self.parameter_matrix[0]))
+                        assr.set_inputs(inputstr)
+                    else:
+                        LOGGER.info(
+                            "Cannot assign inputs to assessor '{}' as the inputs are ambiguous".format(
+                                assr.label()))
+                        for i, p in enumerate(self.parameter_matrix):
+                            LOGGER.info("    Inputs[{}]: {}".format(i, p))

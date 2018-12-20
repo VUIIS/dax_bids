@@ -2166,7 +2166,7 @@ def print_processor(proc_obj):
     if isinstance(proc_obj, processors.ScanProcessor):
         level = 'Scan'
     elif isinstance(proc_obj, processors.AutoProcessor):
-        if proc_obj.type == 'scan':
+        if proc_obj.level() == 'scan':
             level = 'Scan'
 
     proc_dict = proc_obj.__dict__

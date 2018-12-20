@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import logging
 import dax
 from dax import bin
@@ -108,13 +111,20 @@ if __name__ == '__main__':
             auto_procs = processor_graph.ProcessorGraph.order_processors(auto_procs, logger)
             print 'auto_procs =', auto_procs
 
+            # if parsed_args.sessions is not None:
+            #     for s in parsed_args.session:
+            #         sess = intf.select('/project/*/subject/*/session/' + s)
+            #         print sess
+            # else:
             print 'patching project', p
             proj = intf.select_project(p)
             for s in proj.subjects():
                 print 'subject:', s.label()
                 for e in intf.get_sessions(p, s.label()):
-
-                    experiment = XnatUtils.CachedImageSession(intf, p, s.label(), e['label'])
-                    for a in auto_procs:
-                        a.parse_session(experiment)
-                        a.parser.patch_assessors()
+                    if not parsed_args.sessions\
+                        or e['label'] in parsed_args.sessions\
+                        or e['ID'] in parsed_args.sessions:
+                        experiment = XnatUtils.CachedImageSession(intf, p, s.label(), e['label'])
+                        for a in auto_procs:
+                            a.parse_session(experiment)
+                            a.parser.patch_assessors()
