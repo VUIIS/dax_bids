@@ -156,6 +156,8 @@ xnat:imagesessiondata/id,xnat:imagesessiondata/label,{pstype}/procstatus,\
 EXPERIMENT_POST_URI = '''?columns=ID,URI,subject_label,subject_ID,modality,\
 project,date,xsiType,label,xnat:subjectdata/meta/last_modified'''
 
+XMLTYPE = '{http://www.w3.org/2001/XMLSchema-instance}type'
+
 ###############################################################################
 #                                    1) CLASS                                 #
 ###############################################################################
@@ -1337,6 +1339,24 @@ def list_assessors(intf, projectid, subjectid, sessionid):
             new_list.append(anew)
 
     return sorted(new_list, key=lambda k: k['label'])
+
+
+def new_list_project_assessors(intf, projectid):
+    """
+    List all the assessors that you have access to based on the project id
+    :param intf:
+    :param projectid:
+    :return:
+    """
+    project = intf.select_project(projectid)
+    assessors = list()
+    for s in project.subjects():
+        for e in s.experiments():
+            session = CachedImageSession(intf, projectid, s.id(), e.id())
+            for a in session.assessors():
+                assessors.append(a)
+
+    return assessors
 
 
 def list_project_assessors(intf, projectid):
@@ -3436,8 +3456,27 @@ class CachedImageAssessor(object):
         """
         self.intf = intf
         self.assr_parent = parent
+        self.project_id = self.assr_parent.project_id()
+        self.subject_id = self.assr_parent.subject_id()
+        self.session_id = self.assr_parent.session_id()
         self.assr_element = assr_element
         self.proctype = None
+
+    def __getitem__(self, key):
+        if key is 'proctype':
+            return self.type()
+        elif key is 'label':
+            return self.label()
+        elif key is 'xsiType':
+            return self.xsitype()
+        elif key is 'project_id':
+            return self.project_id
+        elif key is 'subject_id':
+            return self.subject_id
+        elif key is 'session_id':
+            return self.session_id
+        else:
+            raise KeyError(key)
 
     def entity_type(self):
         return 'assessor'
@@ -3523,6 +3562,9 @@ class CachedImageAssessor(object):
         if self.proctype is None:
             self.proctype = self.info()['proctype']
         return self.proctype
+
+    def xsitype(self):
+        return self.get(XMLTYPE).lower()
 
     def info(self):
         """

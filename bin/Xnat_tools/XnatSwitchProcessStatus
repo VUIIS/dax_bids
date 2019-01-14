@@ -185,7 +185,7 @@ set properly.\nTraceback: %s' % err
 
         for project in projects:
             sys.stdout.write("  * Project: %s\n" % (project))
-            assessors_list = XnatUtils.list_project_assessors(xnat, project)
+            assessors_list = XnatUtils.new_list_project_assessors(xnat, project)
             assessors.extend(assessors_list)
 
             #Filter assessors:
@@ -445,10 +445,12 @@ def set_need_inputs_proctype(xnat, assessor, need_inputs, full_regex=False):
         assessor_obj = XnatUtils.select_assessor(xnat, a_linked_dict['label'])
         if assessor_obj.exists():
             if a_linked_dict['xsiType'] == XnatUtils.DEFAULT_FS_DATATYPE:
-                set_proc_status(assessor_obj, task.NEED_INPUTS,
-                                xsitype=XnatUtils.DEFAULT_FS_DATATYPE)
+                set_proc_status(
+                    assessor_obj, task.NEED_INPUTS,
+                    xsitype=XnatUtils.DEFAULT_FS_DATATYPE)
             else:
-                set_proc_status(assessor_obj, task.NEED_INPUTS)
+                set_proc_status(
+                    assessor_obj, task.NEED_INPUTS)
 
             li_assessors = XnatUtils.list_assessor_out_resources(
                 xnat,
@@ -536,6 +538,7 @@ assessors.')
                                      args.full_regex)
 
 
+#TODO: BenM: change documentation
 def set_status_assessor(xnat, assessor, status,
                         delete_resources=False, qcstatus=False):
     """
@@ -548,7 +551,8 @@ def set_status_assessor(xnat, assessor, status,
     :param qcstatus: edit the qcstatus instead of procstatus
     :return: None
     """
-    assessor_obj = XnatUtils.select_assessor(xnat, assessor['label'])
+    #assessor_obj = XnatUtils.select_assessor(xnat, assessor['label'])
+    assessor_obj = assessor.full_object()
 
     if qcstatus:
         if assessor['xsiType'] == XnatUtils.DEFAULT_FS_DATATYPE:
@@ -564,17 +568,23 @@ def set_status_assessor(xnat, assessor, status,
             set_proc_status(assessor_obj, status, username=xnat.user)
 
         if delete_resources:
-            if 'resources' in list(assessor.keys()):
-                resources = assessor['resources']
-                for resource in resources:
-                    delete_assr_resource(assessor_obj, resource)
-            else:
-                resources = XnatUtils.list_assessor_out_resources(
-                    xnat,
-                    assessor['project_id'], assessor['subject_label'],
-                    assessor['session_label'], assessor['label'])
-                for resource in resources:
-                    delete_assr_resource(assessor_obj, resource['label'])
+            # if 'resources' in list(assessor.keys()):
+            #     resources = assessor['resources']
+            #     for resource in resources:
+            #         delete_assr_resource(assessor_obj, resource)
+            # else:
+            #     resources = XnatUtils.list_assessor_out_resources(
+            #         xnat,
+            #         assessor['project_id'], assessor['subject_label'],
+            #         assessor['session_label'], assessor['label'])
+            #     for resource in resources:
+            #         delete_assr_resource(assessor_obj, resource['label'])
+            resources = XnatUtils.list_assessor_out_resources(
+                xnat,
+                assessor['project_id'], assessor['subject_id'],
+                assessor['session_id'], assessor['label'])
+            for resource in resources:
+                delete_assr_resource(assessor_obj, resource['label'])
 
 
 def print_status():

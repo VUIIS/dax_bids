@@ -174,13 +174,39 @@ class ComponentTestBuild(TestCase):
     @staticmethod
     def _setup_assessors(session):
         SessionTools.add_assessor(session,
-                                  'proc1-x-subj1-x-sess1-x-1-Proc_X_v1',
+                                  'proj1-x-subj1-x-sess1-x-1-x-Proc_X_v1',
                                   assessor_presets['Proc_X_v1'],
                                   'no_inputs')
         SessionTools.add_assessor(session,
-                                  'proc1-x-subj1-x-sess1-x-2-Proc_X_v1',
+                                  'proj1-x-subj1-x-sess1-x-2-x-Proc_X_v1',
                                   assessor_presets['Proc_X_v1'],
                                   'no_inputs')
+
+
+    def test_check_assessor_list(self):
+        intf = XnatUtils.get_interface(host)
+        proj_id = 'proj1'
+        project = intf.select_project(proj_id)
+        if not project.exists():
+            self.assertTrue(False, 'proj1 should be pre-created for this test')
+
+        subj_id = 'subj1'
+        subject = intf.select_subject(proj_id, subj_id)
+        if not subject.exists():
+            self.assertTrue(False, 'subj1 should be pre-created for this test')
+
+        sess_id = 'sess1'
+        session = intf.select_experiment(proj_id, subj_id, sess_id)
+        if not session.exists():
+            self.assertTrue(False, 'sess1 should be pre-created for this test')
+
+
+        for s in project.subjects():
+            print s
+
+        # delete and recreate scans
+        for a in session.assessors():
+            print a
 
 
     def test_setup_old_assessors(self):
@@ -237,7 +263,7 @@ class ComponentTestBuild(TestCase):
         ComponentTestBuild._setup_scans(session, scan_descriptors)
 
         SessionTools.add_assessor(session,
-                                  'proc1-x-subj1-x-sess1-x-1-Proc_X_v1',
+                                  'proj1-x-subj1-x-sess1-x-1-x-Proc_X_v1',
                                   assessor_presets['Proc_X_v1'],
                                   'no_inputs')
 
@@ -254,7 +280,7 @@ class ComponentTestBuild(TestCase):
         ComponentTestBuild._setup_scans(session, scan_descriptors)
 
         SessionTools.add_assessor(session,
-                                  'proc1-x-subj1-x-sess1-x-1-Proc_X_v1',
+                                  'proj1-x-subj1-x-sess1-x-1-x-Proc_X_v1',
                                   assessor_presets['Proc_X_v1'],
                                   'no_inputs')
 

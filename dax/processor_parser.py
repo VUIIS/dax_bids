@@ -854,8 +854,9 @@ class ProcessorParser:
                             for fa in from_artefacts:
                                 a = artefacts[fa]
                                 from_inputs = a.entity.get_inputs()
-                                mapped_input_vector.append(from_inputs[v2])
-                           
+                                if from_inputs is not None:
+                                    mapped_input_vector.append(from_inputs[v2])
+
                             combined_input_vector.append(mapped_input_vector)
 
                     else:
