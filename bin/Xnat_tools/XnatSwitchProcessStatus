@@ -185,7 +185,7 @@ set properly.\nTraceback: %s' % err
 
         for project in projects:
             sys.stdout.write("  * Project: %s\n" % (project))
-            assessors_list = XnatUtils.new_list_project_assessors(xnat, project)
+            assessors_list = XnatUtils.list_project_assessors(xnat, project)
             assessors.extend(assessors_list)
 
             #Filter assessors:
@@ -551,8 +551,8 @@ def set_status_assessor(xnat, assessor, status,
     :param qcstatus: edit the qcstatus instead of procstatus
     :return: None
     """
-    #assessor_obj = XnatUtils.select_assessor(xnat, assessor['label'])
-    assessor_obj = assessor.full_object()
+    assessor_obj = XnatUtils.new_select_assessor(xnat, assessor)
+    #assessor_obj = assessor.full_object()
 
     if qcstatus:
         if assessor['xsiType'] == XnatUtils.DEFAULT_FS_DATATYPE:

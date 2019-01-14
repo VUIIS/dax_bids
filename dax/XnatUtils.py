@@ -1341,24 +1341,6 @@ def list_assessors(intf, projectid, subjectid, sessionid):
     return sorted(new_list, key=lambda k: k['label'])
 
 
-def new_list_project_assessors(intf, projectid):
-    """
-    List all the assessors that you have access to based on the project id
-    :param intf:
-    :param projectid:
-    :return:
-    """
-    project = intf.select_project(projectid)
-    assessors = list()
-    for s in project.subjects():
-        for e in s.experiments():
-            session = CachedImageSession(intf, projectid, s.id(), e.id())
-            for a in session.assessors():
-                assessors.append(a)
-
-    return assessors
-
-
 def list_project_assessors(intf, projectid):
     """
     List all the assessors that you have access to based on passed project.
@@ -1565,6 +1547,12 @@ def select_assessor(intf, assessor_label):
                                 labels[1],
                                 labels[2],
                                 assessor_label)
+
+def new_select_assessor(intf, assessor_desc):
+    return intf.select_assessor(assessor_desc['project_id'],
+                                assessor_desc['subject_id'],
+                                assessor_desc['session_id'],
+                                assessor_desc['label'])
 
 
 def get_full_object(intf, obj_dict):
