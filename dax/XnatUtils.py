@@ -3444,9 +3444,9 @@ class CachedImageAssessor(object):
         """
         self.intf = intf
         self.assr_parent = parent
-        self.project_id = self.assr_parent.project_id()
-        self.subject_id = self.assr_parent.subject_id()
-        self.session_id = self.assr_parent.session_id()
+        self.project = self.assr_parent.project_id()
+        self.subject = self.assr_parent.subject_id()
+        self.session = self.assr_parent.session_id()
         self.assr_element = assr_element
         self.proctype = None
 
@@ -3458,11 +3458,11 @@ class CachedImageAssessor(object):
         elif key is 'xsiType':
             return self.xsitype()
         elif key is 'project_id':
-            return self.project_id
+            return self.project
         elif key is 'subject_id':
-            return self.subject_id
+            return self.subject
         elif key is 'session_id':
-            return self.session_id
+            return self.session
         else:
             raise KeyError(key)
 
