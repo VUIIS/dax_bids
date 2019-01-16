@@ -205,14 +205,20 @@ class ProcessorParser:
         # map from parameters to input resources
         command_set = dict()
         for k, v in self.variables_to_inputs.iteritems():
+            #TODO: BenM: handle input-less assessors gracefully here
             inp = self.inputs[v['input']]
             artefact_type = inp['artefact_type']
             resource = v['resource']
-
-            path_elements = [assr_inputs[v['input']], resource]
-
-            command_set[k] =\
-                resource_paths[artefact_type].format(*path_elements)
+            artefact = assr_inputs[v['input']]
+            if isinstance(artefact, list):
+                command_set_values = []
+                for a in artefact:
+                    command_set_values.append(
+                        'xnat:' + resource_paths[artefact_type].format(*[a, resource]))
+                command_set[k] = ','.join(command_set_values)
+            else:
+                command_set[k] =\
+                    'xnat:' + resource_paths[artefact_type].format(*[artefact, resource])
 
         return command_set
 

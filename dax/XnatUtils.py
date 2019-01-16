@@ -55,6 +55,7 @@ import xml.etree.cElementTree as ET
 import yaml
 import zipfile
 
+
 from . import utilities
 from .task import (JOB_FAILED, JOB_RUNNING, JOB_PENDING, READY_TO_UPLOAD,
                    NEEDS_QA, RERUN, REPROC, FAILED_NEEDS_REPROC, BAD_QA_STATUS)
@@ -62,7 +63,7 @@ from .errors import (XnatUtilsError, XnatAccessError,
                      XnatAuthentificationError)
 from .dax_settings import (DAX_Settings, DAX_Netrc, DEFAULT_DATATYPE,
                            DEFAULT_FS_DATATYPE)
-
+from .utilities import decode_url_json_string
 
 try:
     basestring
@@ -150,7 +151,7 @@ xnat:imagesessiondata/id,xnat:imagesessiondata/label,URI,{fstype}/procstatus,\
 ASSESSOR_PR_PROJ_POST_URI = '''?project={project}&xsiType={pstype}&columns=ID,\
 label,URI,xsiType,project,xnat:imagesessiondata/subject_id,\
 xnat:imagesessiondata/id,xnat:imagesessiondata/label,{pstype}/procstatus,\
-{pstype}/proctype,{pstype}/validation/status,{pstype}/procversion,\
+{pstype}/proctype,{pstype}/inputs,{pstype}/validation/status,{pstype}/procversion,\
 {pstype}/jobstartdate,{pstype}/memused,{pstype}/walltimeused,\
 {pstype}/jobid,{pstype}/jobnode,{pstype}/out/file/label'''
 EXPERIMENT_POST_URI = '''?columns=ID,URI,subject_label,subject_ID,modality,\
@@ -1459,6 +1460,7 @@ def list_project_assessors(intf, projectid):
                     anew['last_modified'] = sess_id2mod[asse['session_ID']][6]
                     anew['last_updated'] = sess_id2mod[asse['session_ID']][7]
                     anew['resources'] = [asse['%s/out/file/label' % pfix]]
+                    anew['inputs'] = decode_url_json_string(asse['%s/inputs' % pfix])
                     assessors_dict[key] = anew
 
     return sorted(list(assessors_dict.values()), key=lambda k: k['label'])
@@ -1547,6 +1549,7 @@ def select_assessor(intf, assessor_label):
                                 labels[1],
                                 labels[2],
                                 assessor_label)
+
 
 def new_select_assessor(intf, assessor_desc):
     return intf.select_assessor(assessor_desc['project_id'],

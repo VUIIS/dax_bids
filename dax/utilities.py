@@ -5,6 +5,8 @@ h = HTMLParser.HTMLParser()
 
 
 def decode_url_json_string(json_string):
+    if json_string is '':
+        return None
     strings = json.loads(h.unescape(json_string),
                          object_pairs_hook=parse_json_pairs)
     return strings

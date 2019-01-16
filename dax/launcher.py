@@ -14,6 +14,7 @@ import redcap
 import sys
 import os
 import traceback
+import itertools as it
 
 from . import processors, modules, XnatUtils, task, cluster
 from .task import Task, ClusterTask, XnatTask
@@ -544,11 +545,13 @@ cluster queue"
             lastmod_delta = None
 
         # Check for new processors
-        has_new = self.has_new_processors(intf, project_id, session_procs,
-                                          scan_procs)
+        assessor_list = XnatUtils.list_project_assessors(intf, project_id)
+
+        has_new = self.has_new_processors(assessor_list, session_procs, scan_procs)
 
         # Get the list of sessions:
         sessions = self.get_sessions_list(intf, project_id, sessions_local)
+        sdict = self.build_session_dict(assessor_list)
 
         # Update each session from the list:
         for sess_info in sessions:
@@ -1310,6 +1313,24 @@ The project is not part of the settings."""
 
         return sorted_list
 
+
+    @staticmethod
+    def build_session_dict(assessor_list):
+        test = [(1,2), (2,3), (1,4), (2,5)]
+        gtest = dict()
+        for k, g in it.groupby(test, lambda a: a[0]):
+            l = gtest.get(k, [])
+            for i in g:
+                l.append(i)
+            gtest[k] = l
+        print gtest
+
+        grouped_assessors = dict()
+        for k, g in it.groupby(assessor_list, lambda a: a['session_id']):
+            grouped_assessors[k] = list(g)
+        return grouped_assessors
+
+
     def get_project_list(self, all_projects):
         """
         Get project list from the file priority + the other ones
@@ -1384,7 +1405,7 @@ The project is not part of the settings."""
         return True
 
     @staticmethod
-    def has_new_processors(xnat, project_id, sess_proc_list, scan_proc_list):
+    def has_new_processors(assessor_list, sess_proc_list, scan_proc_list):
         """
         Check if has new processors
 
@@ -1395,8 +1416,7 @@ The project is not part of the settings."""
         :return: True if has new processors, False otherwise
         """
         # Get unique list of assessors already in XNAT
-        assr_list = XnatUtils.list_project_assessors(xnat, project_id)
-        assr_type_set = set([x['proctype'] for x in assr_list])
+        assr_type_set = set([x['proctype'] for x in assessor_list])
 
         # Get unique list of processors prescribed for project
         proc_name_set = set([x.name for x in sess_proc_list + scan_proc_list])
