@@ -892,10 +892,10 @@ class AssessorHandler(object):
         :return: The pyxnat EObject of the assessor
 
         """
-        return intf.select(self.project_id,
-                           self.subject_label,
-                           self.session_label,
-                           self.assessor_label)
+        return intf.select_assessor(self.project_id,
+                                    self.subject_label,
+                                    self.session_label,
+                                    self.assessor_label)
 
 
 # TODO: BenM/assessor_of_assessor/use path.txt here to associate results with
