@@ -893,7 +893,7 @@ class AssessorHandler(object):
 
         """
         return intf.select(self.project_id,
-                           self.subject_id,
+                           self.subject_label,
                            self.session_label,
                            self.assessor_label)
 
