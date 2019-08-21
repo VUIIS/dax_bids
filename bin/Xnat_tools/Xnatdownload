@@ -12,6 +12,8 @@ WARNING: very important,--update OPTIONS isn't working completely.
          the previous download or the one that where deleted and reuploaded
          since your last upload. If this message appears, it means the
          attributes hasn't been added yet to XNAT.
+
+         download in BIDS format
 '''
 
 from __future__ import print_function
