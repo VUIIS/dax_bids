@@ -1,1 +1,12 @@
 MJD_3DT1:anat
+25mm_GRE_fieldmap:fmap
+2D_T2*:anat
+3D_Brain_VIEW_FLAIR_Tra:anat
+3D Field Mapping:fmap
+3D_Field_Mapping_3D:fmap
+3DPCA_DEM_MJD:anat
+3mm Field Mapping:fmap
+3mm_GRE_fieldmap:fmap
+FLAIR_LongTR_MOD:anat
+Restingstate:func
+WIP_dti22_96_b0_APA:dwi

@@ -531,9 +531,13 @@ def get_scan_path(scan_dict):
     :param scan_dict: dictionary containing the scan information
     :return: path to download the scan data
     """
+
+    sd_dict = xnat_sd_to_bids_datatype()
+
     if OPTIONS.oneDir:
         scan_path = DIRECTORY
     else:
+
         if 'type' in scan_dict.keys():
             st = scan_dict['type'].strip().replace('/', '_').replace(" ", "")
         else:
@@ -546,9 +550,39 @@ def get_scan_path(scan_dict):
                                                     .replace(" ", "")\
                                                     .replace(":", '_')
                 scan_label = '%s-x-%s' % (scan_label, sd)
-        scan_path = os.path.join(
-            DIRECTORY, scan_dict['project_id'], scan_dict['subject_label'],
-            scan_dict['session_label'], scan_label)
+        if OPTIONS.xnat2bids:
+            sess_path = os.path.join(DIRECTORY, scan_dict['project_id'], scan_dict['subject_label'],
+            scan_dict['session_label'])
+            anat = os.path.join(sess_path, 'anat')
+            functional = os.path.join(sess_path, 'func')
+            fmap = os.path.join(sess_path, 'fmap')
+            dwi = os.path.join(sess_path, 'dwi')
+            unk_bids = os.path.join(sess_path, 'unknown_bids')
+            if not os.path.exists(anat):
+                os.makedirs(anat)
+            if not os.path.exists(functional):
+                os.makedirs(functional)
+            if not os.path.exists(fmap):
+                os.makedirs(fmap)
+            if not os.path.exists(dwi):
+                os.makedirs(dwi)
+            if not os.path.exists(unk_bids):
+                os.makedirs(unk_bids)
+            data_type = sd_dict.get(st, "unknown_bids")
+            #if scan_dict['resources'] == 'NIFTI':
+                #f = open(os.path.join(sess_path, data_type, scan_label + ".json"), "w+")
+                #f.close()
+            if data_type == "unknown_bids":
+                LOGGER.info('   >WARNING: Scan %s did not match any BIDS datatype.'
+                            % scan_label)
+            scan_path = os.path.join(
+                    DIRECTORY, scan_dict['project_id'], scan_dict['subject_label'],
+                    scan_dict['session_label'], data_type)
+
+        else:
+            scan_path = os.path.join(
+                DIRECTORY, scan_dict['project_id'], scan_dict['subject_label'],
+                scan_dict['session_label'], scan_label)
     return scan_path
 
 
@@ -744,6 +778,8 @@ def download_scan(directory, scan_dict, resources_list, row, last_dl_date):
                                   'PAR', row, True, 'file', last_dl_date)
                 download_resource(dl_path, scan_obj.resource('REC'),
                                   'REC', row, True, 'file', last_dl_date)
+            elif OPTIONS.xnat2bids and (rname == 'SNAPSHOTS' or rname == 'secondary'):
+                continue
             else:
                 label = '-x-'.join([scan_dict['project_id'],
                                     scan_dict['subject_label'],
@@ -869,21 +905,26 @@ def default_download(directory, res_obj, res_label, row, last_dl_date):
     :param last_dl_date: time at the last download call
     :return: None
     """
-    res_path = os.path.join(directory, res_label)
+    if OPTIONS.xnat2bids:
+        res_path = os.path.join(directory, res_obj.files().get()[0])
+
+
+    else:
+        res_path = os.path.join(directory, res_label)
     # Add Resource label
     if row is not None:
         row.append(res_label)
         row.append(res_path)
     _ld_mod = int(XnatUtils.get_resource_lastdate_modified(XNAT, res_obj))
     if not os.path.exists(res_path) or \
-       (last_dl_date and int(get_file_timestamp(res_path)) < _ld_mod) \
-       or not os.listdir(res_path):
+    (last_dl_date and int(get_file_timestamp(res_path)) < _ld_mod) \
+    or (not OPTIONS.xnat2bids and not os.listdir(res_path)):
         dl_files(res_obj, directory)
         if CSVWRITER and not OPTIONS.csvfile:
             CSVWRITER.writerow(row)
     else:
         LOGGER.info('   >Resource %s: Skipping resource. Up-to-date.'
-                    % (res_label))
+                % (res_label))
 
 
 def dl_files(res_obj, directory):
@@ -898,7 +939,10 @@ def dl_files(res_obj, directory):
     # if more than one file:
     if len(res_obj.files().get()) > 1:
         # create a dir with the resourcename:
-        output_dir = os.path.join(directory, res_obj.label())
+        if OPTIONS.xnat2bids:
+            output_dir = directory
+        else:
+            output_dir = os.path.join(directory, res_obj.label())
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         LOGGER.info('   >Resource %s: Downloading all resources as a zip and \
@@ -914,7 +958,10 @@ unzipping it...' % (res_obj.label()))
         LOGGER.info('   >Resource %s: Downloading resource.'
                     % (res_obj.label()))
         res_fname = res_obj.files().get()[0]
-        output_dir = os.path.join(directory, res_obj.label())
+        if OPTIONS.xnat2bids:
+            output_dir = directory
+        else:
+            output_dir = os.path.join(directory, res_obj.label())
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
         res_obj.file(res_fname).get(os.path.join(output_dir, res_fname))
@@ -1421,8 +1468,8 @@ scans.')
                     CSVWRITER = None
                     download_data_xnat()
 
-                if OPTIONS.xnat2bids:
-                    transform_xnat_to_bids()
+                #if OPTIONS.xnat2bids:
+                    #transform_xnat_to_bids()
 
 
     LOGGER.info('============================================================')
