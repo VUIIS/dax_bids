@@ -23,16 +23,18 @@ from builtins import str
 from builtins import zip
 
 import os
+import re
 import sys
 import csv
 import copy
+import json
 import time
 import shutil
 import getpass
 import logging
 from dax import XnatUtils
 from datetime import datetime
-
+from xml.etree import cElementTree as ET
 
 DEFAULT_REPORT_NAME = 'download_report.csv'
 DEFAULT_COMMAND_LINE = 'download_commandLine.txt'
@@ -54,6 +56,8 @@ DEFAULT_ARGUMENTS = {'status': None, 'withoutS': None, 'session': None,
                      'host': None, 'qcstatus': None,
                      'assessortype': None, 'scantype': None, 'oneDir': False,
                      'project': None, 'qualities': None, 'directory': None}
+URI = None
+scan_dict = None
 DESCRIPTION = """What is the script doing :
    *Download filtered data from XNAT to your local computer using the \
 different OPTIONS.
@@ -539,7 +543,7 @@ def get_scan_path(scan_dict):
     else:
 
         if 'type' in scan_dict.keys():
-            st = scan_dict['type'].strip().replace('/', '_').replace(" ", "")
+            st = scan_dict['type'] #.strip().replace('/', '_').replace(" ", "")
         else:
             st = 'UNK'
         scan_label = '%s-x-%s' % (scan_dict['ID'], st)
@@ -551,13 +555,13 @@ def get_scan_path(scan_dict):
                                                     .replace(":", '_')
                 scan_label = '%s-x-%s' % (scan_label, sd)
         if OPTIONS.xnat2bids:
-            sess_path = os.path.join(DIRECTORY, scan_dict['project_id'], scan_dict['subject_label'],
-            scan_dict['session_label'])
+            sess_path = os.path.join(DIRECTORY, scan_dict['project_id'], 'sub-'+scan_dict['subject_label'],
+            'ses-'+scan_dict['session_label'])
             anat = os.path.join(sess_path, 'anat')
             functional = os.path.join(sess_path, 'func')
             fmap = os.path.join(sess_path, 'fmap')
             dwi = os.path.join(sess_path, 'dwi')
-            unk_bids = os.path.join(sess_path, 'unknown_bids')
+            unk_bids = os.path.join(DIRECTORY, 'unknown_bids')
             if not os.path.exists(anat):
                 os.makedirs(anat)
             if not os.path.exists(functional):
@@ -569,15 +573,14 @@ def get_scan_path(scan_dict):
             if not os.path.exists(unk_bids):
                 os.makedirs(unk_bids)
             data_type = sd_dict.get(st, "unknown_bids")
-            #if scan_dict['resources'] == 'NIFTI':
-                #f = open(os.path.join(sess_path, data_type, scan_label + ".json"), "w+")
-                #f.close()
             if data_type == "unknown_bids":
                 LOGGER.info('   >WARNING: Scan %s did not match any BIDS datatype.'
                             % scan_label)
-            scan_path = os.path.join(
-                    DIRECTORY, scan_dict['project_id'], scan_dict['subject_label'],
-                    scan_dict['session_label'], data_type)
+                scan_path = os.path.join(DIRECTORY, data_type)
+            else:
+                 scan_path = os.path.join(
+                    DIRECTORY, scan_dict['project_id'], 'sub-'+scan_dict['subject_label'],
+                    'ses-'+scan_dict['session_label'], data_type)
 
         else:
             scan_path = os.path.join(
@@ -611,6 +614,7 @@ def download_data_xnat():
 
     :return: None
     """
+    global scan_dict
     # resources
     scans_res_list = get_option_list(OPTIONS.resourcesS)
     asses_res_list = get_option_list(OPTIONS.resourcesA)
@@ -717,6 +721,8 @@ def transform_xnat_to_bids():
                                         f = open(os.path.join(sess_path, data_type, scan+".json"), "w+")
                                         f.close()
                                     if data_type == "unknown_bids":
+                                        #TODO do project level there? if not check global matching if not match then add
+                                        #local dictonary
                                         LOGGER.info('   >WARNING: Scan %s did not match any BIDS datatype.'
                                                     % scan_file)
 
@@ -729,20 +735,108 @@ def transform_xnat_to_bids():
 
 def xnat_sd_to_bids_datatype():
     """
-    Populate dict with scan description from XNAT with actual datatype
-
-    :return: sd_dict - populated dict
+    Create the global mapping for sd - BIDS dataype from LANDMAN projects
+    :return:
     """
 
-    sd_dict = {}
+    #sd_dict = {}
     # TODO Need to find a better way to provide relate path instead of hardcoded absolute path
-    with open('./venv/dax/bids_dict', 'r') as f:
-        for line in f.readlines():
-            sd = line.split(':')[0].strip()
-            datatype = line.split(':')[1].strip()
-            sd_dict[sd] = datatype
+    #with open('./venv/dax/bids_dict', 'r') as f:
+        #for line in f.readlines():
+            #sd = line.split(':')[0].strip()
+            #datatype = line.split(':')[1].strip()
+            #sd_dict[sd] = datatype
+
+    sd_dict = dict()
+    project = OPTIONS.project
+    with open("local_mapping.json", 'r') as f:
+        local_mapping = json.load(f)
+        if project in local_mapping.keys():
+            sd_dict = local_mapping[project]
+
+        else:
+            scans_list_global = XNAT.get_project_scans('LANDMAN')
+
+            for sd in scans_list_global:
+                c = re.search('T1|T2|T1W', sd['series_description'])
+                if not c == None:
+                    sd_anat = sd['series_description']
+                    sd_dict[sd_anat] = "anat"
+
+            for sd in scans_list_global:
+                c = re.search('rest', sd['series_description'], flags=re.IGNORECASE)
+                if not c == None:
+                    sd_func = sd['series_description']
+                    sd_dict[sd_func] = "func"
+
+            for sd in scans_list_global:
+                c = re.search('dwi|dti', sd['series_description'], flags=re.IGNORECASE)
+                if not c == None:
+                    sd_dwi = sd['series_description']
+                    sd_dict[sd_dwi] = "dwi"
+
+            for sd in scans_list_global:
+                c = re.search('Field|B0', sd['series_description'], flags=re.IGNORECASE)
+                if not c == None:
+                    sd_fmap = sd['series_description']
+                    sd_dict[sd_fmap] = "fmap"
+            with open("global_mapping.json", "w+") as f:
+                json.dump(sd_dict, f, indent=2)
 
     return sd_dict
+
+def update_bids_dict():
+    """
+    Update sd_dict with user input dict
+    :return:
+    """
+    project = OPTIONS.project
+    if OPTIONS.bidsdict:
+        dir_new_json = OPTIONS.bidsdict
+        if not XNAT.select('/data/projects/'+project+'/resources/BIDS/files').get():
+            XNAT.select('/data/projects/'+project+'/resources/BIDS/files/project_mapping.json').put(src=dir_new_json)
+        else:
+            XNAT.select('/data/projects/' + project + '/resources/BIDS/files/project_mapping.json').get(dest="/Users/praitayinikanakaraj/tmp_SEP19.json")
+            XNAT.select('/data/projects/'+project+'/resources/BIDS/files/'+dir_new_json.split('/')[-1]).put(src=dir_new_json, overwrite=True)
+        # with open('local_mapping.json', "r+") as f:
+        #     local_mapping = json.load(f)
+        #     if project in local_mapping.keys():
+        #         with open(dir_new_json, "r") as r:
+        #             new_json = json.load(r)
+        #             for k, v in new_json.items():
+        #                 local_mapping[k].update(v)
+        #             f.seek(0, 0)
+        #             json.dump(local_mapping, f,  indent=2)
+        #
+        #     else:
+        #         with open(dir_new_json, "r") as r:
+        #             new_json = json.load(r)
+        #             local_mapping.update(new_json)
+        #             f.seek(0, 0)
+        #             json.dump(local_mapping, f,  indent=2)
+
+    return
+
+def dataset_description_file():
+    """
+    Build dataset description BIDS json file
+    :return:
+    """
+    if OPTIONS.xnat2bids:
+        BIDSVERSION = "1.0.1"
+        dataset_description = dict()
+        dataset_description['BIDSVersion'] = BIDSVERSION
+        dataset_description['Name'] = OPTIONS.project
+        dataset_description['DatasetDOI'] = HOST
+        project_info = XNAT.select('/project/'+ OPTIONS.project).get()
+        project_info = ET.fromstring(project_info)
+        PI_element = project_info.findall('{http://nrg.wustl.edu/xnat}PI')
+        dataset_description['Author'] = PI_element[0][1].text, PI_element[0][0].text
+        dd_file = os.path.join(DIRECTORY, OPTIONS.project)
+        if not os.path.exists(dd_file):
+            os.mkdir(dd_file)
+        with open(os.path.join(dd_file, 'dataset_description.json'), 'w+') as f:
+            json.dump(dataset_description, f, indent=2)
 
 def download_scan(directory, scan_dict, resources_list, row, last_dl_date):
     """
@@ -756,6 +850,7 @@ def download_scan(directory, scan_dict, resources_list, row, last_dl_date):
     :param last_dl_date: time at the last download call
     :return: None
     """
+    global URI
     try:
         scan_obj = XnatUtils.get_full_object(XNAT, scan_dict)
     except KeyError:
@@ -765,6 +860,7 @@ def download_scan(directory, scan_dict, resources_list, row, last_dl_date):
                                                                                                                   subject=scan_dict['subject_label'],
                                                                                                                   experiment=scan_dict['session_label'],
                                                                                                                   scan=scan_dict['ID']))
+    URI = scan_obj._uri
     if not scan_obj.exists():
         LOGGER.info('  ->WARNING: No scan with the ID given.')
     else:
@@ -778,7 +874,7 @@ def download_scan(directory, scan_dict, resources_list, row, last_dl_date):
                                   'PAR', row, True, 'file', last_dl_date)
                 download_resource(dl_path, scan_obj.resource('REC'),
                                   'REC', row, True, 'file', last_dl_date)
-            elif OPTIONS.xnat2bids and (rname == 'SNAPSHOTS' or rname == 'secondary'):
+            elif OPTIONS.xnat2bids and (rname == 'SNAPSHOTS' or rname == 'secondary' or rname == 'DICOM' or rname == 'PAR' or rname == 'REC'):
                 continue
             else:
                 label = '-x-'.join([scan_dict['project_id'],
@@ -906,9 +1002,7 @@ def default_download(directory, res_obj, res_label, row, last_dl_date):
     :return: None
     """
     if OPTIONS.xnat2bids:
-        res_path = os.path.join(directory, res_obj.files().get()[0])
-
-
+        res_path = os.path.join(directory, bids_filename(directory, res_obj.files().get()[0]))
     else:
         res_path = os.path.join(directory, res_label)
     # Add Resource label
@@ -920,6 +1014,13 @@ def default_download(directory, res_obj, res_label, row, last_dl_date):
     (last_dl_date and int(get_file_timestamp(res_path)) < _ld_mod) \
     or (not OPTIONS.xnat2bids and not os.listdir(res_path)):
         dl_files(res_obj, directory)
+        if OPTIONS.xnat2bids and res_label == 'NIFTI' and not directory.split('/')[-1] == 'unknown_bids':
+            xnat_filename = res_obj.files().get()[0]
+            xnat_path = URI #os.path.join(DIRECTORY, scan_dict['project_id'], scan_dict['subject_label'],scan_dict['session_label'])
+            xnat_prov = {"XNATfilename": xnat_filename,
+                         "XNATProvenance": xnat_path}
+            with open(os.path.join(res_path.split('.')[0] + ".json"), "w+") as f:
+                json.dump(xnat_prov, f, indent=2)
         if CSVWRITER and not OPTIONS.csvfile:
             CSVWRITER.writerow(row)
     else:
@@ -960,16 +1061,46 @@ unzipping it...' % (res_obj.label()))
         res_fname = res_obj.files().get()[0]
         if OPTIONS.xnat2bids:
             output_dir = directory
+            res_fname_new = bids_filename(output_dir, res_fname)
+
         else:
             output_dir = os.path.join(directory, res_obj.label())
+            res_fname_new = res_fname
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        res_obj.file(res_fname).get(os.path.join(output_dir, res_fname))
-        if os.path.join(directory, res_fname)[-3:] == 'zip':
-            fpath = os.path.join(output_dir, res_fname)
+        res_obj.file(res_fname).get(os.path.join(output_dir, res_fname_new))
+        if os.path.join(directory, res_fname_new)[-3:] == 'zip':
+            fpath = os.path.join(output_dir, res_fname_new)
             cmd = 'unzip -o -d "%s" "%s" > /dev/null' % (output_dir, fpath)
             os.system(cmd)
             os.remove(fpath)
+
+def bids_filename(output_dir, res_fname):
+    """
+    Method to rename XNAT filename to BIDS filename
+
+    :return:
+    """
+    if output_dir.endswith("unknown_bids"):
+        return res_fname
+
+    sub_name = output_dir.split('/')[-3]
+    ses_name = output_dir.split('/')[-2]
+    dt_name = output_dir.split('/')[-1]
+    scan_id = scan_dict['ID']
+    if output_dir.endswith("anat"):
+        bids_fname = sub_name + '_' + ses_name + '_' + 'T1w' + '_run-' + scan_id + '.' + ".".join(res_fname.split('.')[1:])
+        return bids_fname
+    elif output_dir.endswith("func"):
+        bids_fname = sub_name + '_' + ses_name + '_' + 'bold' + '_run-' + scan_id + '.' + ".".join(res_fname.split('.')[1:])
+        return bids_fname
+    elif output_dir.endswith("dwi"):
+        bids_fname = sub_name + '_' + ses_name + '_' + 'dwi' + '_run-' + scan_id + '.' + ".".join(res_fname.split('.')[1:])
+        return bids_fname
+    elif output_dir.endswith("fmap"):
+        bids_fname = sub_name + '_' + ses_name + '_' + 'fieldmap' + '_run-' + scan_id + '.' + ".".join(res_fname.split('.')[1:])
+        return bids_fname
+
 
 
 def dl_file(res_obj, fpath):
@@ -1266,6 +1397,8 @@ def main_display():
             print('#     %*s -> %*s#' % (-20, 'Update mode', -33, 'on'))
         if OPTIONS.xnat2bids:
             print('#     %*s -> %*s#' % (-20, 'XNAT to BIDS mode', -33, 'on'))
+        if OPTIONS.bidsdict:
+            print('#     %*s -> %*s#' % (-20, 'Appending to BIDS dict', -33, get_proper_str(OPTIONS.bidsdict, True)))
         if OPTIONS.outputfile:
             print('#     %*s -> %*s#' % (
                 -20, 'Output file',
@@ -1388,6 +1521,10 @@ downloaded with the newest version if there is one (not working yet).")
                       help="Download in BIDS format. \
     E.g : --bids")
 
+    argp.add_argument("--addTypeBIDS", dest="bidsdict", default=None,
+                      help="Download in BIDS format. \
+        E.g : --addTypebids")
+
     # Regex
     argp.add_argument("--fullRegex", dest="full_regex", action='store_true',
                       help="Use full regex for filtering data.")
@@ -1463,9 +1600,15 @@ scans.')
                         else:
                             for ROW in OLD_ROWS:
                                 CSVWRITER.writerow(ROW)
+                        update_bids_dict()
+                        dataset_description_file()
                         download_data_xnat()
+
+
                 else:
                     CSVWRITER = None
+                    update_bids_dict()
+                    dataset_description_file()
                     download_data_xnat()
 
                 #if OPTIONS.xnat2bids:
