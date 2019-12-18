@@ -1354,7 +1354,8 @@ scans.')
                     CSVWRITER = None
                     download_data_xnat()
         if OPTIONS.xnat2bids:
+            project = OPTIONS.project
         #TRANFOMR XNAT2BIDS REFACTOR
-            transform_to_bids()
+            XnatToBids.transform_to_bids(XNAT, DIRECTORY, project)
 
     LOGGER.info('============================================================')

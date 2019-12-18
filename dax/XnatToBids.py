@@ -4,15 +4,22 @@ Tranform XNAT folder to BIDS format
 @author: Praitayini Kanakaraj, Electrical Engineering, Vanderbilt University
 
 '''
+import os
+import re
+import json
+import shutil
+import nibabel as nib
+from xml.etree import cElementTree as ET
 
-def transform_to_bids():
+
+def transform_to_bids(XNAT, DIRECTORY, project):
     """
      Method to move the data from XNAT folders to BIDS format by looping through
      subjects/projects
 
      :return: None
      """
-    sd_dict = sd_datatype_mapping()
+    sd_dict = sd_datatype_mapping(XNAT, project)
     data_type_l = ["anat", "func", "fmap", "dwi", "unknown_bids"]
 
     subj_idx = 1
@@ -40,7 +47,7 @@ def transform_to_bids():
                                         os.makedirs(os.path.join(bids_sess_path, data_type))
                                         shutil.move(os.path.join(sess_path, scan, scan_resources, scan_file),
                                                     os.path.join(bids_sess_path, data_type))
-                                        bids_fname = bids_filename(bids_sess_path, data_type, scan, scan_file)
+                                        bids_fname = bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT, project)
                                         os.rename(os.path.join(bids_sess_path, data_type, scan_file), os.path.join(bids_sess_path, data_type, bids_fname))
                                         if scan_resources == 'NIFTI' and not data_type == "unknown_bids":
                                             xnat_path = 'URI'
@@ -58,19 +65,19 @@ def transform_to_bids():
                             shutil.rmtree(os.path.join(sess_path, scan))
                     sess_idx = sess_idx + 1
                 subj_idx = subj_idx + 1
-    dataset_description_file(BIDS_DIR)
+    dataset_description_file(BIDS_DIR, XNAT, project)
 
-def sd_datatype_mapping():
+def sd_datatype_mapping(XNAT, project):
     """
       Method to map series description to task type for functional scans
 
       :return: mapping dict
     """
     sd_dict = {}
-    if OPTIONS.selectionScan:
-        project = OPTIONS.selectionScan.split('-')[0]
-    else:
-        project = OPTIONS.project
+    #if OPTIONS.selectionScan:
+        #project = OPTIONS.selectionScan.split('-')[0]
+    #else:
+    #project = OPTIONS.project
     if XNAT.select('/data/projects/' + project + '/resources/BIDS_datatype').exists():
         for res in XNAT.select('/data/projects/' + project + '/resources/BIDS_datatype/files').get():
             if res.endswith('.json'):
@@ -108,7 +115,7 @@ def sd_datatype_mapping():
 
     return sd_dict
 
-def bids_filename(bids_sess_path, data_type, scan, scan_file):
+def bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT, project):
     """
      Method to rename files based on BIDS naming scheme
 
@@ -122,7 +129,7 @@ def bids_filename(bids_sess_path, data_type, scan, scan_file):
     ses_name = bids_sess_path.split('/')[-1]
     scan_id = scan_file.split('-x-')[3].split('.')[0]
     st = scan.split('-x-')[1]
-    tk_dict = sd_tasktype_mapping()
+    tk_dict = sd_tasktype_mapping(XNAT, project)
     if data_type == "anat":
         bids_fname = sub_name + '_' + ses_name + '_acq-' + scan_id + '_' + 'T1w' + '.' + ".".join(scan_file.split('.')[1:])
         return bids_fname
@@ -149,14 +156,14 @@ def bids_filename(bids_sess_path, data_type, scan, scan_file):
         bids_fname = sub_name + '_' + ses_name + '_acq-' + scan_id + '_bold' + '.' + ".".join(scan_file.split('.')[1:])
         return bids_fname
 
-def sd_tasktype_mapping():
+def sd_tasktype_mapping(XNAT, project):
     """
      Method to map series description to task type for functional scans
 
      :return: mapping dict
      """
     tk_dict = {}
-    project = OPTIONS.project
+    #project = OPTIONS.project
     if XNAT.select('/data/projects/' + project + '/resources/BIDS_tasktype').exists():
         for res in XNAT.select('/data/projects/' + project + '/resources/BIDS_tasktype/files').get():
             if res.endswith('.json'):
@@ -174,7 +181,7 @@ def sd_tasktype_mapping():
             json.dump(tk_dict, f, indent=2)
     return tk_dict
 
-def dataset_description_file(BIDS_DIR):
+def dataset_description_file(BIDS_DIR, XNAT, project):
     """
     Build BIDS dataset description json file
 
@@ -184,13 +191,13 @@ def dataset_description_file(BIDS_DIR):
     BIDSVERSION = "1.0.1"
     dataset_description = dict()
     dataset_description['BIDSVersion'] = BIDSVERSION
-    dataset_description['Name'] = OPTIONS.project
-    dataset_description['DatasetDOI'] = HOST
-    project_info = XNAT.select('/project/' + OPTIONS.project).get()
+    dataset_description['Name'] = project
+    dataset_description['DatasetDOI'] = 'xnat' #TODO:HOST
+    project_info = XNAT.select('/project/' + project).get()
     project_info = ET.fromstring(project_info)
     PI_element = project_info.findall('{http://nrg.wustl.edu/xnat}PI')
     #dataset_description['Author'] = PI_element[0][1].text, PI_element[0][0].text
-    dd_file = os.path.join(BIDS_DIR, OPTIONS.project)
+    dd_file = os.path.join(BIDS_DIR, project)
     if not os.path.exists(dd_file):
         os.mkdir(dd_file)
     with open(os.path.join(dd_file, 'dataset_description.json'), 'w+') as f:
