@@ -27,15 +27,27 @@ def add_parser_args():
     argp.add_argument('-u', '--username', dest='username', default=None,
                       help='Username for XNAT. Default: using $XNAT_USER.')
     argp.add_argument("-o", "--logfile", dest="logfile", default=None,
-                      help="Write the display in a file giving to this OPTIONS.")
-    argp.add_argument('--project', dest="project", default=None, help='Project to create/update BIDS mapping file')
-    argp.add_argument('--type', dest="type", default=None, help='Prints the existing BIDS mapping file')
-    argp.add_argument('--create', dest="create", action=None, default=UNSPECIFIED, nargs='?', help='Create a BIDS new mapping file and use it')
-    argp.add_argument('--update', dest="update", default=None, help='Update a existing BIDS mapping file and use it')
-    argp.add_argument('--replace', dest="replace",  default=None, help='Downloads the given BIDS mapping file')
-    argp.add_argument('--revert', dest="revert", default=None, help='Downloads the given BIDS mapping file')
-    argp.add_argument('--download', dest="download",  action=None, help='Downloads the given BIDS mapping file')
-    argp.add_argument('--template', dest="template",  action='store_true', help='Default mapping template and updated if there')
+                      help="Write the display/output in a file given to this OPTIONS.")
+    argp.add_argument('--project', dest="project", default=None,
+                      help='Project to create/update BIDS mapping file')
+    argp.add_argument('--type', dest="type", default=None,
+                      help='The type of mapping either datatype or tasktype')
+    argp.add_argument('--create', dest="create", action=None, default=UNSPECIFIED, nargs='?',
+                      help='Create the given BIDS new mapping file at project level. (EG. --create <mappingfile>.csv)'
+                           'Default create creates the default mapping at project file. (EG. --create)')
+    argp.add_argument('--update', dest="update", default=None,
+                      help='Update the existing BIDS mapping file at project level. (EG. --update <mappingfile>.csv)'
+                           'This option can only add rules')
+    argp.add_argument('--replace', dest="replace",  default=None,
+                      help='Replace the existing BIDS mapping file at project level. (EG. --replace <mappingfile>.csv)'
+                           'This option can remove and add new rules')
+    argp.add_argument('--revert', dest="revert", default=None,
+                      help='Revert to an old mapping from a specific date/time. (EG: --revert 10-17-19-21:32:15'
+                           'or --revert 10-17-19). Check the LOGFILE at project level for the date')
+    argp.add_argument('--download', dest="download",  action=None,
+                      help='Downloads the current BIDS mapping file')
+    argp.add_argument('--template', dest="template",  default=None,
+                      help='Default mapping template')
 
     return argp
 
@@ -60,10 +72,12 @@ def setup_info_logger(name, logfile):
 
 def template():
     #TODO sd | default mapping | rule at project level
-    scans_list_global = XNAT.get_project_scans('LANDMAN')
+    sd_dict = []
+    template_dir = OPTIONS.template
+    scans_list_global = XNAT.get_project_scans(project)
     for sd in scans_list_global:
-        sd['series_description']
-    with open("mapping_template.csv", "w+") as f:
+        sd_dict.append(sd['series_description'])
+    with open(template_dir, "w+") as f:
         json.dump(sd_dict, f, indent=2)
 
 def default():
@@ -179,8 +193,6 @@ def update():
             with open(XNAT.select(os.path.join(res_files, res)).get(), "r+") as f:
                 prev_mapping = json.load(f)
                 if project in prev_mapping.keys():
-                    #with open(src_path, "r") as r:
-                        #new_json = json.load(r)
                     for k, v in new_mapping.items():
                         if OPTIONS.update:
                             findDiff(new_mapping, prev_mapping)
@@ -188,10 +200,10 @@ def update():
                         if OPTIONS.replace:
                             findDiff_change(new_mapping, prev_mapping)
                             prev_mapping = new_mapping
-                    #f.seek(0, 0)
-                    #json.dump(prev_mapping, f,  indent=2)
 
-                    XNAT.select(os.path.join(res_files, new_json_name)).put(src=json.dumps(prev_mapping, indent=2), overwrite=True)
+                    XNAT.select(os.path.join(res_files, new_json_name)).put(src=
+                                                                            json.dumps(prev_mapping, indent=2),
+                                                                            overwrite=True)
                     XNAT.select(os.path.join(res_files, res)).delete()
                     LOGGER.info('UPDATED: uploaded mapping file %s' % new_json_name)
                 else:
@@ -218,7 +230,8 @@ def revert():
                             if mapping_all[1].strip() == '+':
                                 prev_mapping[project].pop(mapping_all[2].split(':')[0].strip())
                             if mapping_all[1].strip() == '-':
-                                prev_mapping[project].update({mapping_all[2].split(':')[0].strip(): mapping_all[2].split(':')[1].strip()})
+                                prev_mapping[project].update({mapping_all[2].split(':')[0].
+                                                             strip(): mapping_all[2].split(':')[1].strip()})
                         else:
                             break
                 findDiff_change(prev_mapping, orig_mapping)
@@ -227,6 +240,13 @@ def revert():
 
 
 def findDiff(d1, d2, path=""):
+    """
+    Function to record/log the changing made when adding rules
+    :param d1: dict with new mapping
+    :param d2: dict with old mapping
+    :param path: ""
+    :return:
+    """
     for k, v in d1.iteritems():
         if k not in d2.keys():
             row1 = d_m_y, " + ", k + " : " + v
@@ -247,6 +267,13 @@ def findDiff(d1, d2, path=""):
 
 
 def findDiff_change(d1, d2, path=""):
+    """
+    Function to record/log the changing made when reverting rules
+    :param d1: dict with new mapping
+    :param d2: dict with previous mapping
+    :param path: ""
+    :return:
+    """
     for k, v in d1.iteritems():
         if k not in d2.keys():
             row4 = d_m_y, " + ", k + " : " + v
@@ -266,7 +293,10 @@ def findDiff_change(d1, d2, path=""):
 
 
 def mapping_download():
-
+    """
+    Function to download the mapping file at project level
+    :return:
+    """
     download_file = OPTIONS.download
     XNAT.select('/projects/' + project + '/resources/BIDS_' + mapping_type + '/files/' + download_file).get(
                  dest=os.path.join(os.getcwd(), download_file))
@@ -293,44 +323,43 @@ if __name__ == '__main__':
                                  pwd=PWD)
     date = datetime.now()
     d_m_y = date.strftime("%m-%d-%y-%H:%M:%S")
-    project = OPTIONS.project
 
-
-
-    if not OPTIONS.type:
-        LOGGER.info("WARNING: Type is required. Use --type")
+    if not OPTIONS.project:
+        LOGGER.info("WARNING: Project is require. Use --project")
     else:
-        mapping_type = OPTIONS.type
-        CSVWRITER = None
-        res_files = '/data/projects/' + project + '/resources/BIDS_' + mapping_type + '/files'
-
-        xnat_logfile = XNAT.select(os.path.join(res_files, 'LOGFILE.txt'))
-        if not xnat_logfile.exists():
-            if OPTIONS.revert:
-                LOGGER.error('Cannot perform --revert. Create mapping with --create option first')
-                sys.exit()
-            xnat_logfile.put(src="Logfile\n")
-        LOGFILE = xnat_logfile.get()
-        csvfilewrite = open(LOGFILE, 'ab')
-        CSVWRITER = csv.writer(csvfilewrite, delimiter=',')
-        #msg = 'Last updated/changed date = {:%Y-%m-%d %H:%M:%S}'
-        #CSVWRITER.writerow([msg.format(datetime.now())])
-        #CSVWRITER.writerow(DEFAULT_CSV_LIST)
+        project = OPTIONS.project
         if OPTIONS.template:
             template()
-        if OPTIONS.create:
-            create()
-        if OPTIONS.create == None:
-            default()
-        if OPTIONS.update or OPTIONS.replace:
-            update()
-        if OPTIONS.revert:
-            revert()
-        if OPTIONS.download:
-            mapping_download()
+        else:
+            if not OPTIONS.type:
+                LOGGER.info("WARNING: Type is required. Use --type")
+            else:
+                mapping_type = OPTIONS.type
+                CSVWRITER = None
+                res_files = '/data/projects/' + project + '/resources/BIDS_' + mapping_type + '/files'
 
-        csvfilewrite.close()
-        XNAT.select(os.path.join(res_files, 'LOGFILE.txt')).put(src=LOGFILE, overwrite=True)
+                xnat_logfile = XNAT.select(os.path.join(res_files, 'LOGFILE.txt'))
+                if not xnat_logfile.exists():
+                    if OPTIONS.revert:
+                        LOGGER.error('Cannot perform --revert. Create mapping with --create option first')
+                        sys.exit()
+                    xnat_logfile.put(src="Logfile\n")
+                LOGFILE = xnat_logfile.get()
+                csvfilewrite = open(LOGFILE, 'ab')
+                CSVWRITER = csv.writer(csvfilewrite, delimiter=',')
+                if OPTIONS.create:
+                    create()
+                if OPTIONS.create == None:
+                    default()
+                if OPTIONS.update or OPTIONS.replace:
+                    update()
+                if OPTIONS.revert:
+                    revert()
+                if OPTIONS.download:
+                    mapping_download()
+
+                csvfilewrite.close()
+                XNAT.select(os.path.join(res_files, 'LOGFILE.txt')).put(src=LOGFILE, overwrite=True)
 
 
 
