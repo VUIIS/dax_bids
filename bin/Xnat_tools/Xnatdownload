@@ -1033,6 +1033,11 @@ specified. Use -s or --WOS.')
         print('OPTION ERROR: resources selected for assessors but no types \
 specified. Use -a or --WOA.')
         return False
+    # BIDS
+    if OPTIONS.xnat2bids and not OPTIONS.bids_dir:
+        print('OPTION ERROR: BIDS directory not specified. Use option \
+--bids_dir.')
+        return False
     return True
 
 
@@ -1155,6 +1160,10 @@ def main_display():
             print('#     %*s -> %*s#' % (-20, 'Update mode', -33, 'on'))
         if OPTIONS.xnat2bids:
             print('#     %*s -> %*s#' % (-20, 'XNAT to BIDS mode', -33, 'on'))
+        if OPTIONS.bids_dir:
+            print('#     %*s -> %*s#' % (
+                -20, 'BIDS Directory',
+                -33, get_proper_str(OPTIONS.bids_dir, True)))
         if OPTIONS.outputfile:
             print('#     %*s -> %*s#' % (
                 -20, 'Output file',
@@ -1284,6 +1293,9 @@ OPTIONS.")
     #BIDS
     argp.add_argument("-b", "--bids", dest="xnat2bids", action='store_true',
                       help="Transform to BIDS format after XNAT download")
+
+    argp.add_argument("--bids_dir", dest="bids_dir", default=None,
+                      help="Directory to store the bids dataset")
     return argp
 
 
@@ -1355,7 +1367,8 @@ scans.')
                     download_data_xnat()
         if OPTIONS.xnat2bids:
             project = OPTIONS.project
+            BIDS_DIR = OPTIONS.bids_dir
         #TRANFOMR XNAT2BIDS REFACTOR
-            XnatToBids.transform_to_bids(XNAT, DIRECTORY, project)
+            XnatToBids.transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR)
 
     LOGGER.info('============================================================')
