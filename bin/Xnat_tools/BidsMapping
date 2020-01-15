@@ -17,10 +17,12 @@ import argparse
 from dax import XnatUtils
 from datetime import datetime
 
-#DEFAULT_CSV_LIST = ['no. of changes', 'datatime', 'changesmade']
 UNSPECIFIED = object()
 def add_parser_args():
-
+    """
+    The arguments for the tool
+    :return:
+    """
     argp = argparse.ArgumentParser()
     argp.add_argument('--host', dest='host', default=None,
                       help='Host for XNAT. Default: using $XNAT_HOST.')
@@ -71,6 +73,11 @@ def setup_info_logger(name, logfile):
     return logger
 
 def template():
+    """
+    Function to generate the series description from a project
+    in csv
+    :return:
+    """
     #TODO sd | default mapping | rule at project level
     sd_dict = []
     template_dir = OPTIONS.template
@@ -81,7 +88,12 @@ def template():
         json.dump(sd_dict, f, indent=2)
 
 def default():
+    """
+    Function to make the default mapping at project level if
+    mapping does not exit
     #TODO go back to default when wanted? use findchange for logging??
+    :return:
+    """
     new_mapping = dict()
     new_mapping['LANDMAN'] = {}
 
@@ -138,43 +150,54 @@ def default():
 
 
 def create():
-        dir_new_csv = OPTIONS.create
-        new_mapping = dict()
-        new_mapping['LANDMAN'] = {}
-        with open(dir_new_csv) as csvFile:
-            csvReader = csv.DictReader(csvFile)
-            for rows in csvReader:
-                sd = rows['sd']
-                new_mapping['LANDMAN'][sd] = rows['dt']
-
-
-        LOGGER.info('date %s' % (date.strftime("%d-%m-%y-%H:%M:%S")))
-        new_json_name = d_m_y + '_' + mapping_type + '.json'
-        is_json_present = False
-        for res in XNAT.select(res_files).get():
-            if not res.endswith('.json'):
-                continue
-            else:
-                is_json_present = True
-
-        if not is_json_present:
-            XNAT.select(os.path.join(res_files, new_json_name)).put(src=json.dumps(new_mapping, indent=2))
-            log_new_mapping(new_mapping)
-            LOGGER.info('CREATED: New mapping file %s is uploaded' % new_json_name)
+    """
+    Function to read the given csv file and create new mapping
+    at project level
+    :return:
+    """
+    dir_new_csv = OPTIONS.create
+    new_mapping = dict()
+    new_mapping['LANDMAN'] = {}
+    with open(dir_new_csv) as csvFile:
+        csvReader = csv.DictReader(csvFile)
+        for rows in csvReader:
+            sd = rows['sd']
+            new_mapping['LANDMAN'][sd] = rows['dt']
+    LOGGER.info('date %s' % (date.strftime("%d-%m-%y-%H:%M:%S")))
+    new_json_name = d_m_y + '_' + mapping_type + '.json'
+    is_json_present = False
+    for res in XNAT.select(res_files).get():
+        if not res.endswith('.json'):
+            continue
         else:
-            LOGGER.info('Datatype mapping exists at project level. You can update it using --update to update it \
-        or --replace to replace the mapping')
+            is_json_present = True
+
+    if not is_json_present:
+        XNAT.select(os.path.join(res_files, new_json_name)).put(src=json.dumps(new_mapping, indent=2))
+        log_new_mapping(new_mapping)
+        LOGGER.info('CREATED: New mapping file %s is uploaded' % new_json_name)
+    else:
+        LOGGER.info('Datatype mapping exists at project level. You can update it using --update to update it \
+    or --replace to replace the mapping')
 
 
 def log_new_mapping(d):
-    # with open(d, "r") as r:
-    #     first_mapping = json.load(r)
+    """
+    Logging when new mapping is created fat project level
+    :param d: new mapping
+    :return:
+    """
     for k, v in d[project].iteritems():
         row0 = d_m_y, " + ", k + " : " + v
         CSVWRITER.writerow(row0)
 
 
 def update():
+    """
+    Function to read the csv file with new rules and to add new rules
+    at project level
+    :return:
+    """
     new_json_name = d_m_y + '_' + mapping_type + '.json'
     if OPTIONS.update:
         src_path = OPTIONS.update
@@ -211,6 +234,11 @@ def update():
 
 
 def revert():
+    """
+    Function to go back a mapping of a previous date/time
+    using the log file at project level
+    :return:
+    """
     new_json_name = d_m_y + '_' + mapping_type + '.json'
     orig_mapping = None
     for res in XNAT.select(res_files).get():
