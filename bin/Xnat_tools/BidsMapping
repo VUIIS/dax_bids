@@ -162,7 +162,10 @@ def create():
         csvReader = csv.DictReader(csvFile)
         for rows in csvReader:
             sd = rows['sd']
-            new_mapping[project][sd] = rows['dt']
+            if mapping_type == 'datatype':
+                new_mapping[project][sd] = rows['dt']
+            else:
+                new_mapping[project][sd] = rows['tt']
     LOGGER.info('date %s' % (date.strftime("%d-%m-%y-%H:%M:%S")))
     new_json_name = d_m_y + '_' + mapping_type + '.json'
     is_json_present = False
