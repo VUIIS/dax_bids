@@ -36,7 +36,11 @@ def add_parser_args():
                       help='The type of mapping either datatype or tasktype')
     argp.add_argument('--create', dest="create", action=None, default=UNSPECIFIED, nargs='?',
                       help='Create the given BIDS new mapping file at project level. (EG. --create <mappingfile>.csv)'
-                           'Default create creates the default mapping at project file. (EG. --create)')
+                           'Default create creates the default mapping at project file. (EG. --create)'
+                           'csvfile EG: '
+                           'series_description,datatype'
+                           'T1W/3D/TFE,anat'
+                           'Resting State,func')
     argp.add_argument('--update', dest="update", default=None,
                       help='Update the existing BIDS mapping file at project level. (EG. --update <mappingfile>.csv)'
                            'This option can only add rules')
