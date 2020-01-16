@@ -157,12 +157,12 @@ def create():
     """
     dir_new_csv = OPTIONS.create
     new_mapping = dict()
-    new_mapping['LANDMAN'] = {}
+    new_mapping[project] = {}
     with open(dir_new_csv) as csvFile:
         csvReader = csv.DictReader(csvFile)
         for rows in csvReader:
             sd = rows['sd']
-            new_mapping['LANDMAN'][sd] = rows['dt']
+            new_mapping[project][sd] = rows['dt']
     LOGGER.info('date %s' % (date.strftime("%d-%m-%y-%H:%M:%S")))
     new_json_name = d_m_y + '_' + mapping_type + '.json'
     is_json_present = False
