@@ -27,27 +27,27 @@ def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR):
     for proj in os.listdir(DIRECTORY):
         if os.path.isdir(os.path.join(DIRECTORY, proj)):
             for subj in os.listdir(os.path.join(DIRECTORY, proj)):
-                #subj_idx = 1
+                # subj_idx = 1
                 for sess in os.listdir(os.path.join(DIRECTORY, proj, subj)):
                     sess_path = os.path.join(DIRECTORY, proj, subj, sess)
                     if not os.path.exists(BIDS_DIR):
                         os.mkdir(BIDS_DIR)
-                    #sess_idx = 1
-                    bids_sess_path = os.path.join(BIDS_DIR, proj, 'sub-'+"{0:0=2d}".format(subj_idx),
-                                                  'ses-'+"{0:0=2d}".format(sess_idx))
+                    # sess_idx = 1
+                    bids_sess_path = os.path.join(BIDS_DIR, proj, 'sub-' + "{0:0=2d}".format(subj_idx),
+                                                  'ses-' + "{0:0=2d}".format(sess_idx))
                     for scan in os.listdir(sess_path):
                         if scan not in data_type_l:
                             for scan_resources in os.listdir(os.path.join(sess_path, scan)):
                                 for scan_file in os.listdir(os.path.join(sess_path, scan, scan_resources)):
                                     scan_type = scan.split('-x-')[1]
-                                    #if "_" in scan_type:
-                                    #    scan_type = " ".join(scan_type.split("_"))
+                                    # TODO: when unknown_bids --> error
                                     data_type = sd_dict.get(scan_type, "unknown_bids")
                                     if not os.path.exists(os.path.join(bids_sess_path, data_type)):
                                         os.makedirs(os.path.join(bids_sess_path, data_type))
                                         shutil.move(os.path.join(sess_path, scan, scan_resources, scan_file),
                                                     os.path.join(bids_sess_path, data_type))
-                                        bids_fname = bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT, project)
+                                        bids_fname = bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT,
+                                                                   project)
                                         bids_res_path = os.path.join(bids_sess_path, data_type, bids_fname)
                                         os.rename(os.path.join(bids_sess_path, data_type, scan_file), bids_res_path)
                                         create_json_sidecar(XNAT, scan_resources, data_type, scan_file,
@@ -56,6 +56,7 @@ def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR):
                     sess_idx = sess_idx + 1
                 subj_idx = subj_idx + 1
     dataset_description_file(BIDS_DIR, XNAT, project)
+
 
 def create_json_sidecar(XNAT, scan_resources, data_type, scan_file, bids_res_path, scan_type, project):
     """
@@ -81,6 +82,7 @@ def create_json_sidecar(XNAT, scan_resources, data_type, scan_file, bids_res_pat
         with open(os.path.join(bids_res_path.split('.')[0] + ".json"), "w+") as f:
             json.dump(xnat_prov, f, indent=2)
 
+
 def sd_datatype_mapping(XNAT, project):
     """
       Method to map series description to task type for functional scans
@@ -88,16 +90,19 @@ def sd_datatype_mapping(XNAT, project):
       :return: mapping dict
     """
     sd_dict = {}
-    #if OPTIONS.selectionScan:
-        #project = OPTIONS.selectionScan.split('-')[0]
-    #else:
-    #project = OPTIONS.project
+    # if OPTIONS.selectionScan:
+    # project = OPTIONS.selectionScan.split('-')[0]
+    # else:
+    # project = OPTIONS.project
     if XNAT.select('/data/projects/' + project + '/resources/BIDS_datatype').exists():
         for res in XNAT.select('/data/projects/' + project + '/resources/BIDS_datatype/files').get():
             if res.endswith('.json'):
-                with open(XNAT.select('/data/projects/' + project + '/resources/BIDS_datatype/files/' + res).get(), "r+") as f:
+                with open(XNAT.select('/data/projects/' + project + '/resources/BIDS_datatype/files/' + res).get(),
+                          "r+") as f:
                     datatype_mapping = json.load(f)
                     sd_dict = datatype_mapping[project]
+                    sd_dict = {k.strip().replace('/', '_').replace(" ", "").replace(":", '_')
+                               : v for k, v in sd_dict.items()}
     else:
         scans_list_global = XNAT.get_project_scans('LANDMAN')
 
@@ -128,6 +133,7 @@ def sd_datatype_mapping(XNAT, project):
             json.dump(sd_dict, f, indent=2)
 
     return sd_dict
+
 
 def bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT, project):
     """
@@ -175,6 +181,7 @@ def bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT, project):
                      '.' + ".".join(scan_file.split('.')[1:])
         return bids_fname
 
+
 def sd_tasktype_mapping(XNAT, project):
     """
      Method to map series description to task type for functional scans
@@ -182,7 +189,7 @@ def sd_tasktype_mapping(XNAT, project):
      :return: mapping dict
      """
     tk_dict = {}
-    #project = OPTIONS.project
+    # project = OPTIONS.project
     if XNAT.select('/data/projects/' + project + '/resources/BIDS_tasktype').exists():
         for res in XNAT.select('/data/projects/' + project + '/resources/BIDS_tasktype/files').get():
             if res.endswith('.json'):
@@ -190,6 +197,9 @@ def sd_tasktype_mapping(XNAT, project):
                                       + res).get(), "r+") as f:
                     datatype_mapping = json.load(f)
                     tk_dict = datatype_mapping[project]
+                    tk_dict = {k.strip().replace('/', '_').replace(" ", "").replace(":", '_')
+                               : v for k, v in tk_dict.items()}
+
     else:
         scans_list_global = XNAT.get_project_scans('LANDMAN')
         for sd in scans_list_global:
@@ -200,6 +210,7 @@ def sd_tasktype_mapping(XNAT, project):
         with open("global_tk_mapping.json", "w+") as f:
             json.dump(tk_dict, f, indent=2)
     return tk_dict
+
 
 def dataset_description_file(BIDS_DIR, XNAT, project):
     """
