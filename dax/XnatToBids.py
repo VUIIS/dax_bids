@@ -6,22 +6,23 @@ Tranform XNAT folder to BIDS format
 '''
 import os
 import re
+import sys
 import json
 import shutil
 import nibabel as nib
 from xml.etree import cElementTree as ET
 
 
-def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR):
+def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR, LOGGER):
     """
      Method to move the data from XNAT folders to BIDS format (based on datatype) by looping through
      subjects/projects.
 
      :return: None
      """
+    LOGGER.info("Moving files to the BIDS folder")
     sd_dict = sd_datatype_mapping(XNAT, project)
     data_type_l = ["anat", "func", "fmap", "dwi", "unknown_bids"]
-
     subj_idx = 1
     sess_idx = 1
     for proj in os.listdir(DIRECTORY):
@@ -51,41 +52,64 @@ def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR):
                                         bids_res_path = os.path.join(bids_sess_path, data_type, bids_fname)
                                         os.rename(os.path.join(bids_sess_path, data_type, scan_file), bids_res_path)
                                         create_json_sidecar(XNAT, scan_resources, data_type, scan_file,
-                                                            bids_res_path, scan_type, project)
+                                                            bids_res_path, scan_type, project, LOGGER)
                             shutil.rmtree(os.path.join(sess_path, scan))
                     sess_idx = sess_idx + 1
                 subj_idx = subj_idx + 1
     dataset_description_file(BIDS_DIR, XNAT, project)
 
 
-def create_json_sidecar(XNAT, scan_resources, data_type, scan_file, bids_res_path, scan_type, project):
+def create_json_sidecar(XNAT, scan_resources, data_type, scan_file, bids_res_path, scan_type, project, LOGGER):
     """
     Method to create the json sidecars for NIFTI data
     :return:
     """
 
     if scan_resources == 'NIFTI' and not data_type == "unknown_bids":
-        xnat_path = XNAT.host + "/data/projects/%s/experiments/%s/scans/%s" % (scan_file.split('-x-')[0],
-                                                                               scan_file.split('-x-')[1],
-                                                                               scan_file.split('-x-')[2])
+        scan = '/projects/%s/subjects/%s/experiments/%s/scans/%s' % (project, scan_file.split('-x-')[1],
+                                                                     scan_file.split('-x-')[2],
+                                                                     scan_file.split('-x-')[3].split('.')[0])
+        scan_info = XNAT.select(scan)
         xnat_prov = {"XNATfilename": scan_file,
-                     "XNATProvenance": xnat_path}
+                     "XNATProvenance": XNAT.host + scan_info._uri}
         if data_type == 'func':
             img = nib.load(bids_res_path)
-            TR = img.header.get_zooms()[3]
+            TR_zoom = img.header.get_zooms()[3]
             tk_dict = sd_tasktype_mapping(XNAT, project)
             task_type = tk_dict.get(scan_type)
+            tr_dict = sd_tr_mapping(XNAT, project, LOGGER)
+            TR = tr_dict.get(scan_type)
+            if TR_zoom != TR:
+                LOGGER.warn("The TR in the mapping does not match with NIFTI header")
             xnat_prov = {"XNATfilename": scan_file,
-                         "XNATProvenance": xnat_path,
+                         "XNATProvenance": XNAT.host + scan_info._uri,
                          "TaskName": task_type,
                          "RepetitionTime": float(TR)}
         with open(os.path.join(bids_res_path.split('.')[0] + ".json"), "w+") as f:
             json.dump(xnat_prov, f, indent=2)
 
 
+def sd_tr_mapping(XNAT, project, LOGGER):
+    tr_dict = {}
+    if XNAT.select('/data/projects/' + project + '/resources/BIDS_repetition_time').exists():
+        for res in XNAT.select('/data/projects/' + project + '/resources/BIDS_repetition_time/files').get():
+            if res.endswith('.json'):
+                with open(
+                        XNAT.select('/data/projects/' + project + '/resources/BIDS_repetition_time/files/' + res).get(),
+                        "r+") as f:
+                    tr_mapping = json.load(f)
+                    tr_dict = tr_mapping[project]
+                    tr_dict = {k.strip().replace('/', '_').replace(" ", "").replace(":", '_')
+                               : v for k, v in tr_dict.items()}
+    else:
+        LOGGER.error("ERROR no TR mapping at project level")
+        sys.exit()
+    return tr_dict
+
+
 def sd_datatype_mapping(XNAT, project):
     """
-      Method to map series description to task type for functional scans
+      Method to map scan type to task type for functional scans
 
       :return: mapping dict
     """
@@ -107,27 +131,27 @@ def sd_datatype_mapping(XNAT, project):
         scans_list_global = XNAT.get_project_scans('LANDMAN')
 
         for sd in scans_list_global:
-            c = re.search('T1|T2|T1W', sd['series_description'])
+            c = re.search('T1|T2|T1W', sd['scan_type'])
             if not c == None:
-                sd_anat = sd['series_description'].strip().replace('/', '_').replace(" ", "").replace(":", '_')
+                sd_anat = sd['scan_type'].strip().replace('/', '_').replace(" ", "").replace(":", '_')
                 sd_dict[sd_anat] = "anat"
 
         for sd in scans_list_global:
-            c = re.search('rest|Resting state|Rest', sd['series_description'], flags=re.IGNORECASE)
+            c = re.search('rest|Resting state|Rest', sd['scan_type'], flags=re.IGNORECASE)
             if not c == None:
-                sd_func = sd['series_description'].strip().replace('/', '_').replace(" ", "").replace(":", '_')
+                sd_func = sd['scan_type'].strip().replace('/', '_').replace(" ", "").replace(":", '_')
                 sd_dict[sd_func] = "func"
 
         for sd in scans_list_global:
-            c = re.search('dwi|dti', sd['series_description'], flags=re.IGNORECASE)
+            c = re.search('dwi|dti', sd['scan_type'], flags=re.IGNORECASE)
             if not c == None:
-                sd_dwi = sd['series_description'].strip().replace('/', '_').replace(" ", "").replace(":", '_')
+                sd_dwi = sd['scan_type'].strip().replace('/', '_').replace(" ", "").replace(":", '_')
                 sd_dict[sd_dwi] = "dwi"
 
         for sd in scans_list_global:
-            c = re.search('Field|B0', sd['series_description'], flags=re.IGNORECASE)
+            c = re.search('Field|B0', sd['scan_type'], flags=re.IGNORECASE)
             if not c == None:
-                sd_fmap = sd['series_description'].strip().replace('/', '_').replace(" ", "").replace(":", '_')
+                sd_fmap = sd['scan_type'].strip().replace('/', '_').replace(" ", "").replace(":", '_')
                 sd_dict[sd_fmap] = "fmap"
         with open("global_mapping.json", "w+") as f:
             json.dump(sd_dict, f, indent=2)
@@ -184,7 +208,7 @@ def bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT, project):
 
 def sd_tasktype_mapping(XNAT, project):
     """
-     Method to map series description to task type for functional scans
+     Method to map scan type to task type for functional scans
 
      :return: mapping dict
      """
@@ -203,9 +227,9 @@ def sd_tasktype_mapping(XNAT, project):
     else:
         scans_list_global = XNAT.get_project_scans('LANDMAN')
         for sd in scans_list_global:
-            c = re.search('rest|Resting state|Rest', sd['series_description'], flags=re.IGNORECASE)
+            c = re.search('rest|Resting state|Rest', sd['scan_type'], flags=re.IGNORECASE)
             if not c == None:
-                sd_func = sd['series_description'].strip().replace('/', '_').replace(" ", "").replace(":", '_')
+                sd_func = sd['scan_type'].strip().replace('/', '_').replace(" ", "").replace(":", '_')
                 tk_dict[sd_func] = "rest"
         with open("global_tk_mapping.json", "w+") as f:
             json.dump(tk_dict, f, indent=2)
@@ -233,7 +257,7 @@ def dataset_description_file(BIDS_DIR, XNAT, project):
         dataset_description['Author'] = "No Author defined on XNAT"
     dd_file = os.path.join(BIDS_DIR, project)
     if not os.path.exists(dd_file):
-        os.mkdir(dd_file)
+        os.makedirs(dd_file)
     with open(os.path.join(dd_file, 'dataset_description.json'), 'w+') as f:
         json.dump(dataset_description, f, indent=2)
 

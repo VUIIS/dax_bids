@@ -33,14 +33,16 @@ def add_parser_args():
     argp.add_argument('--project', dest="project", default=None,
                       help='Project to create/update BIDS mapping file')
     argp.add_argument('--type', dest="type", default=None,
-                      help='The type of mapping either datatype or tasktype')
-    argp.add_argument('--create', dest="create", action=None, default=UNSPECIFIED, nargs='?',
+                      help='The type of mapping either datatype, tasktype or repetition_time')
+    argp.add_argument('--create', dest="create", action=None,
                       help='Create the given BIDS new mapping file at project level. (EG. --create <mappingfile>.csv)'
                            'Default create creates the default mapping at project file. (EG. --create)'
                            'csvfile EG: '
-                           'series_description,datatype'
+                           'scan_type,datatype'
                            'T1W/3D/TFE,anat'
                            'Resting State,func')
+    argp.add_argument('--create_default', dest="create_default", action='store_true',
+                      help='Default create creates the default mapping at project file. (EG. --create_default)')
     argp.add_argument('--update', dest="update", default=None,
                       help='Update the existing BIDS mapping file at project level. (EG. --update <mappingfile>.csv)'
                            'This option can only add rules')
@@ -51,7 +53,7 @@ def add_parser_args():
                       help='Revert to an old mapping from a specific date/time. (EG: --revert 10-17-19-21:32:15'
                            'or --revert 10-17-19). Check the LOGFILE at project level for the date')
     argp.add_argument('--download', dest="download",  action=None,
-                      help='Downloads the current BIDS mapping file')
+                      help='Downloads the current BIDS mapping file (EG: --download <foldername>)')
     argp.add_argument('--template', dest="template",  default=None,
                       help='Default mapping template')
 
@@ -78,18 +80,23 @@ def setup_info_logger(name, logfile):
 
 def template():
     """
-    Function to generate the series description from a project
+    Function to generate the scan type from a project
     in csv
     :return:
     """
     #TODO sd | default mapping | rule at project level
-    sd_dict = []
+    sd_list = []
     template_dir = OPTIONS.template
     scans_list_global = XNAT.get_project_scans(project)
     for sd in scans_list_global:
-        sd_dict.append(sd['series_description'])
+        sd_list.append(sd['scan_type'])
+    sd_set = set(sd_list)
+    uniq_sd = filter(None, list(sd_set))
     with open(template_dir, "w+") as f:
-        json.dump(sd_dict, f, indent=2)
+        wr = csv.writer(f)
+        for row in uniq_sd:
+            wr.writerow([row])
+    LOGGER.info('Template with scan_type at %s', template_dir)
 
 def default():
     """
@@ -99,58 +106,60 @@ def default():
     :return:
     """
     new_mapping = dict()
-    new_mapping['LANDMAN'] = {}
-
-    if mapping_type == 'datatype':
-        scans_list_global = XNAT.get_project_scans('LANDMAN')
-
-        for sd in scans_list_global:
-            c = re.search('T1|T2|T1W', sd['series_description'])
-            if not c == None:
-                sd_anat = sd['series_description']
-                new_mapping['LANDMAN'][sd_anat] = "anat"
-
-        for sd in scans_list_global:
-            c = re.search('rest|Resting state', sd['series_description'], flags=re.IGNORECASE)
-            if not c == None:
-                sd_func = sd['series_description']
-                new_mapping['LANDMAN'][sd_func] = "func"
-
-        for sd in scans_list_global:
-            c = re.search('dwi|dti', sd['series_description'], flags=re.IGNORECASE)
-            if not c == None:
-                sd_dwi = sd['series_description']
-                new_mapping['LANDMAN'][sd_dwi] = "dwi"
-
-        for sd in scans_list_global:
-            c = re.search('Field|B0', sd['series_description'], flags=re.IGNORECASE)
-            if not c == None:
-                sd_fmap = sd['series_description']
-                new_mapping['LANDMAN'][sd_fmap] = "fmap"
-
-    if mapping_type == 'tasktype':
-        scans_list_global = XNAT.get_project_scans('LANDMAN')
-        for sd in scans_list_global:
-            c = re.search('rest', sd['series_description'], flags=re.IGNORECASE)
-            if not c == None:
-                sd_func = sd['series_description']
-                new_mapping['LANDMAN'][sd_func] = "rest"
-
-    new_json_name = d_m_y + '_' + mapping_type + '.json'
-    is_json_present = False
-    for res in XNAT.select(res_files).get():
-        if not res.endswith('.json'):
-            continue
-        else:
-            is_json_present = True
-
-    if not is_json_present:
-        XNAT.select(os.path.join(res_files, new_json_name)).put(src=json.dumps(new_mapping, indent=2))
-        log_new_mapping(new_mapping)
-        LOGGER.info('CREATED: Default mapping file %s is uploaded' % new_json_name)
+    new_mapping[project] = {}
+    if mapping_type == 'repetition_time':
+        LOGGER.info('Repetition time does not have default mapping, use --create')
     else:
-        LOGGER.info('Datatype mapping exists at project level. You can update it using --update to update it \
-    or --replace to replace the mapping')
+        if mapping_type == 'datatype':
+            scans_list_global = XNAT.get_project_scans('LANDMAN')
+
+            for sd in scans_list_global:
+                c = re.search('T1|T2|T1W', sd['scan_type'])
+                if not c == None:
+                    sd_anat = sd['scan_type']
+                    new_mapping[project][sd_anat] = "anat"
+
+            for sd in scans_list_global:
+                c = re.search('rest|Resting state', sd['scan_type'], flags=re.IGNORECASE)
+                if not c == None:
+                    sd_func = sd['scan_type']
+                    new_mapping[project][sd_func] = "func"
+
+            for sd in scans_list_global:
+                c = re.search('dwi|dti', sd['scan_type'], flags=re.IGNORECASE)
+                if not c == None:
+                    sd_dwi = sd['scan_type']
+                    new_mapping[project][sd_dwi] = "dwi"
+
+            for sd in scans_list_global:
+                c = re.search('Field|B0', sd['scan_type'], flags=re.IGNORECASE)
+                if not c == None:
+                    sd_fmap = sd['scan_type']
+                    new_mapping[project][sd_fmap] = "fmap"
+
+        if mapping_type == 'tasktype':
+            scans_list_global = XNAT.get_project_scans('LANDMAN')
+            for sd in scans_list_global:
+                c = re.search('rest', sd['scan_type'], flags=re.IGNORECASE)
+                if not c == None:
+                    sd_func = sd['scan_type']
+                    new_mapping[project][sd_func] = "rest"
+
+        new_json_name = d_m_y + '_' + mapping_type + '.json'
+        is_json_present = False
+        for res in XNAT.select(res_files).get():
+            if not res.endswith('.json'):
+                continue
+            else:
+                is_json_present = True
+
+        if not is_json_present:
+            XNAT.select(os.path.join(res_files, new_json_name)).put(src=json.dumps(new_mapping, indent=2))
+            log_new_mapping(new_mapping)
+            LOGGER.info('CREATED: Default mapping file %s is uploaded' % new_json_name)
+        else:
+            LOGGER.info('Datatype mapping exists at project level. You can update it using --update to update it '
+                        'or --replace to replace the mapping')
 
 
 def create():
@@ -162,14 +171,17 @@ def create():
     dir_new_csv = OPTIONS.create
     new_mapping = dict()
     new_mapping[project] = {}
+    csv_check(dir_new_csv)
     with open(dir_new_csv) as csvFile:
         csvReader = csv.DictReader(csvFile)
         for rows in csvReader:
-            sd = rows['series_description']
+            sd = rows['scan_type']
             if mapping_type == 'datatype':
                 new_mapping[project][sd] = rows['datatype']
-            else:
+            elif mapping_type == 'tasktype':
                 new_mapping[project][sd] = rows['tasktype']
+            elif mapping_type == 'repetition_time':
+                new_mapping[project][sd] = rows['repetition_time']
     LOGGER.info('date %s' % (date.strftime("%d-%m-%y-%H:%M:%S")))
     new_json_name = d_m_y + '_' + mapping_type + '.json'
     is_json_present = False
@@ -184,8 +196,8 @@ def create():
         log_new_mapping(new_mapping)
         LOGGER.info('CREATED: New mapping file %s is uploaded' % new_json_name)
     else:
-        LOGGER.info('Datatype mapping exists at project level. You can update it using --update to update it \
-    or --replace to replace the mapping')
+        LOGGER.info('Datatype mapping exists at project level. You can update it using --update to update it '
+                    'or --replace to replace the mapping')
 
 
 def log_new_mapping(d):
@@ -211,13 +223,18 @@ def update():
     if OPTIONS.replace:
         src_path = OPTIONS.replace
     new_mapping = dict()
-    new_mapping['LANDMAN'] = {}
+    new_mapping[project] = {}
+    csv_check(src_path)
     with open(src_path, 'r') as csvFile:
         csvReader = csv.DictReader(csvFile)
         for rows in csvReader:
-            sd = rows['sd']
-            new_mapping['LANDMAN'][sd] = rows['dt']
-
+            sd = rows['scan_type']
+            if mapping_type == 'datatype':
+                new_mapping[project][sd] = rows['datatype']
+            elif mapping_type == 'tasktype':
+                new_mapping[project][sd] = rows['tasktype']
+            elif mapping_type == 'repetition_time':
+                new_mapping[project][sd] = rows['repetition_time']
     for res in XNAT.select(res_files).get():
         if res.endswith('.json'):
             with open(XNAT.select(os.path.join(res_files, res)).get(), "r+") as f:
@@ -239,6 +256,22 @@ def update():
                 else:
                     LOGGER.error('ERROR: The mapping file format should have project as key')
 
+def csv_check(src_path):
+    with open(src_path, 'r') as csvFile:
+        csvReader = csv.DictReader(csvFile)
+        if csvReader.fieldnames[0] == "scan_type" and csvReader.fieldnames[1] in ["datatype","tasktype"]:
+            if csvReader.fieldnames[1] == "datatype":
+                for rows in csvReader:
+                    if rows['datatype'] == ["anat", "dwi", "func", "fmap"]:
+                        LOGGER.info("CSV format good")
+                    else:
+                        LOGGER.error("ERROR in CSV datatype column")
+                        sys.exit()
+            else:
+                LOGGER.info("CSV format good")
+        else:
+            LOGGER.error("ERROR in CSV column headers")
+            sys.exit()
 
 def revert():
     """
@@ -272,6 +305,7 @@ def revert():
                 findDiff_change(prev_mapping, orig_mapping)
             XNAT.select(os.path.join(res_files, new_json_name)).put(src=json.dumps(prev_mapping, indent=2))
             res_obj.delete()
+            LOGGER.info('REVERTED: changed mapping file %s' % new_json_name,)
 
 
 def findDiff(d1, d2, path=""):
@@ -333,9 +367,11 @@ def mapping_download():
     :return:
     """
     download_file = OPTIONS.download
-    XNAT.select('/projects/' + project + '/resources/BIDS_' + mapping_type + '/files/' + download_file).get(
-                 dest=os.path.join(os.getcwd(), download_file))
-    LOGGER.info('DOWNLOADED: File %s at %s' % (download_file, os.getcwd()))
+    download_dir = os.path.join(os.getcwd(), download_file)
+    os.makedirs(download_dir)
+    XNAT.select('/projects/' + project + '/resources/BIDS_' + mapping_type + '/').get(
+                 dest_dir=download_dir)
+    LOGGER.info('DOWNLOADED: %s mapping file at %s' % (mapping_type, download_dir))
 
 
 if __name__ == '__main__':
@@ -368,6 +404,8 @@ if __name__ == '__main__':
         else:
             if not OPTIONS.type:
                 LOGGER.info("WARNING: Type is required. Use --type")
+            elif OPTIONS.type not in ["datatype","tasktype","repetition_time"]:
+                LOGGER.error("ERROR: Type must be datatype or tasktype or repetition_time")
             else:
                 mapping_type = OPTIONS.type
                 CSVWRITER = None
@@ -384,7 +422,7 @@ if __name__ == '__main__':
                 CSVWRITER = csv.writer(csvfilewrite, delimiter=',')
                 if OPTIONS.create:
                     create()
-                if OPTIONS.create == None:
+                if OPTIONS.create_default:
                     default()
                 if OPTIONS.update or OPTIONS.replace:
                     update()
