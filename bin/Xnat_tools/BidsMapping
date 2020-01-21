@@ -259,7 +259,8 @@ def update():
 def csv_check(src_path):
     with open(src_path, 'r') as csvFile:
         csvReader = csv.DictReader(csvFile)
-        if csvReader.fieldnames[0] == "scan_type" and csvReader.fieldnames[1] in ["datatype","tasktype"]:
+        if csvReader.fieldnames[0] == "scan_type" and csvReader.fieldnames[1] in \
+                ["datatype", "tasktype", "repetition_time"]:
             if csvReader.fieldnames[1] == "datatype":
                 for rows in csvReader:
                     if rows['datatype'] == ["anat", "dwi", "func", "fmap"]:
@@ -404,7 +405,7 @@ if __name__ == '__main__':
         else:
             if not OPTIONS.type:
                 LOGGER.info("WARNING: Type is required. Use --type")
-            elif OPTIONS.type not in ["datatype","tasktype","repetition_time"]:
+            elif OPTIONS.type not in ["datatype", "tasktype", "repetition_time"]:
                 LOGGER.error("ERROR: Type must be datatype or tasktype or repetition_time")
             else:
                 mapping_type = OPTIONS.type
