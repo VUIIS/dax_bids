@@ -23,7 +23,8 @@ def add_parser_args():
     The arguments for the tool
     :return:
     """
-    argp = argparse.ArgumentParser()
+    argp = argparse.ArgumentParser(description='details', usage='use "%(prog)s --help" for more information',
+                                   formatter_class=argparse.RawTextHelpFormatter)
     argp.add_argument('--host', dest='host', default=None,
                       help='Host for XNAT. Default: using $XNAT_HOST.')
     argp.add_argument('-u', '--username', dest='username', default=None,
@@ -35,12 +36,12 @@ def add_parser_args():
     argp.add_argument('--type', dest="type", default=None,
                       help='The type of mapping either datatype, tasktype or repetition_time')
     argp.add_argument('--create', dest="create", action=None,
-                      help='Create the given BIDS new mapping file at project level. (EG. --create <mappingfile>.csv)'
-                           'Default create creates the default mapping at project file. (EG. --create)'
-                           'csvfile EG: '
-                           'scan_type,datatype'
-                           'T1W/3D/TFE,anat'
-                           'Resting State,func')
+                      help='Create the given BIDS new mapping file at project level. (EG. --create <mappingfile>.csv)\n'
+                           'Default create creates the default mapping at project file. (EG. --create)\n'
+                           'csvfile EG:\n'
+                           'scan_type,datatype\n'
+                           'T1W/3D/TFE,anat\n'
+                           'Resting State,func\n')
     argp.add_argument('--create_default', dest="create_default", action='store_true',
                       help='Default create creates the default mapping at project file. (EG. --create_default)')
     argp.add_argument('--update', dest="update", default=None,
@@ -263,15 +264,14 @@ def csv_check(src_path):
                 ["datatype", "tasktype", "repetition_time"]:
             if csvReader.fieldnames[1] == "datatype":
                 for rows in csvReader:
-                    if rows['datatype'] == ["anat", "dwi", "func", "fmap"]:
-                        LOGGER.info("CSV format good")
-                    else:
-                        LOGGER.error("ERROR in CSV datatype column")
+                    if rows['datatype'] not in ["anat", "dwi", "func", "fmap"]:
+                        LOGGER.error("ERROR in CSV unknown datatype column. Datatype should be anat, dwi, fmap or func")
                         sys.exit()
+                LOGGER.info("CSV format good")
             else:
                 LOGGER.info("CSV format good")
         else:
-            LOGGER.error("ERROR in CSV column headers")
+            LOGGER.error("ERROR in CSV column headers. Column headers should be datatype, tasktype or repetition_time")
             sys.exit()
 
 def revert():
