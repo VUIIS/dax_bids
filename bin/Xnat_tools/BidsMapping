@@ -34,7 +34,7 @@ def add_parser_args():
     argp.add_argument('--project', dest="project", default=None,
                       help='Project to create/update BIDS mapping file')
     argp.add_argument('--type', dest="type", default=None,
-                      help='The type of mapping either datatype, tasktype or repetition_time')
+                      help='The type of mapping either datatype, tasktype or repetition_time_sec')
     argp.add_argument('--create', dest="create", action=None,
                       help='Create the given BIDS new mapping file at project level. (EG. --create <mappingfile>.csv)\n'
                            'Default create creates the default mapping at project file. (EG. --create)\n'
@@ -108,7 +108,7 @@ def default():
     """
     new_mapping = dict()
     new_mapping[project] = {}
-    if mapping_type == 'repetition_time':
+    if mapping_type == 'repetition_time_sec':
         LOGGER.info('Repetition time does not have default mapping, use --create')
     else:
         if mapping_type == 'datatype':
@@ -181,8 +181,8 @@ def create():
                 new_mapping[project][sd] = rows['datatype']
             elif mapping_type == 'tasktype':
                 new_mapping[project][sd] = rows['tasktype']
-            elif mapping_type == 'repetition_time':
-                new_mapping[project][sd] = rows['repetition_time']
+            elif mapping_type == 'repetition_time_sec':
+                new_mapping[project][sd] = rows['repetition_time_sec']
     LOGGER.info('date %s' % (date.strftime("%d-%m-%y-%H:%M:%S")))
     new_json_name = d_m_y + '_' + mapping_type + '.json'
     is_json_present = False
@@ -234,8 +234,8 @@ def update():
                 new_mapping[project][sd] = rows['datatype']
             elif mapping_type == 'tasktype':
                 new_mapping[project][sd] = rows['tasktype']
-            elif mapping_type == 'repetition_time':
-                new_mapping[project][sd] = rows['repetition_time']
+            elif mapping_type == 'repetition_time_sec':
+                new_mapping[project][sd] = rows['repetition_time_sec']
     for res in XNAT.select(res_files).get():
         if res.endswith('.json'):
             with open(XNAT.select(os.path.join(res_files, res)).get(), "r+") as f:
@@ -261,7 +261,7 @@ def csv_check(src_path):
     with open(src_path, 'r') as csvFile:
         csvReader = csv.DictReader(csvFile)
         if csvReader.fieldnames[0] == "scan_type" and csvReader.fieldnames[1] in \
-                ["datatype", "tasktype", "repetition_time"]:
+                ["datatype", "tasktype", "repetition_time_sec"]:
             if csvReader.fieldnames[1] == "datatype":
                 for rows in csvReader:
                     if rows['datatype'] not in ["anat", "dwi", "func", "fmap"]:
@@ -271,7 +271,7 @@ def csv_check(src_path):
             else:
                 LOGGER.info("CSV format good")
         else:
-            LOGGER.error("ERROR in CSV column headers. Column headers should be datatype, tasktype or repetition_time")
+            LOGGER.error("ERROR in CSV column headers. Column headers should be datatype, tasktype or repetition_time_sec")
             sys.exit()
 
 def revert():
@@ -405,8 +405,8 @@ if __name__ == '__main__':
         else:
             if not OPTIONS.type:
                 LOGGER.info("WARNING: Type is required. Use --type")
-            elif OPTIONS.type not in ["datatype", "tasktype", "repetition_time"]:
-                LOGGER.error("ERROR: Type must be datatype or tasktype or repetition_time")
+            elif OPTIONS.type not in ["datatype", "tasktype", "repetition_time_sec"]:
+                LOGGER.error("ERROR: Type must be datatype or tasktype or repetition_time_sec")
             else:
                 mapping_type = OPTIONS.type
                 CSVWRITER = None
