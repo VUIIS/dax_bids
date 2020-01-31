@@ -26,7 +26,7 @@ def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR, LOGGER):
     subj_idx = 1
     sess_idx = 1
     for proj in os.listdir(DIRECTORY):
-        if os.path.isdir(os.path.join(DIRECTORY, proj)):
+        if proj == project and os.path.isdir(os.path.join(DIRECTORY, proj)):
             for subj in os.listdir(os.path.join(DIRECTORY, proj)):
                 # subj_idx = 1
                 for sess in os.listdir(os.path.join(DIRECTORY, proj, subj)):
@@ -45,58 +45,68 @@ def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR, LOGGER):
                                     data_type = sd_dict.get(scan_type, "unknown_bids")
                                     if not os.path.exists(os.path.join(bids_sess_path, data_type)):
                                         os.makedirs(os.path.join(bids_sess_path, data_type))
-                                        shutil.move(os.path.join(sess_path, scan, scan_resources, scan_file),
-                                                    os.path.join(bids_sess_path, data_type))
-                                        bids_fname = bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT,
-                                                                   project)
-                                        bids_res_path = os.path.join(bids_sess_path, data_type, bids_fname)
-                                        os.rename(os.path.join(bids_sess_path, data_type, scan_file), bids_res_path)
-                                        create_json_sidecar(XNAT, scan_resources, data_type, scan_file,
-                                                            bids_res_path, scan_type, project, LOGGER)
+                                    shutil.move(os.path.join(sess_path, scan, scan_resources, scan_file),
+                                                os.path.join(bids_sess_path, data_type))
+                                    bids_fname = bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT,
+                                                               project)
+                                    bids_res_path = os.path.join(bids_sess_path, data_type, bids_fname)
+                                    os.rename(os.path.join(bids_sess_path, data_type, scan_file), bids_res_path)
+                                    create_json_sidecar(XNAT, scan_resources, data_type, scan_file, scan,
+                                                        bids_res_path, scan_type, project, sess, subj, LOGGER)
                             shutil.rmtree(os.path.join(sess_path, scan))
                     sess_idx = sess_idx + 1
                 subj_idx = subj_idx + 1
     dataset_description_file(BIDS_DIR, XNAT, project)
 
 
-def create_json_sidecar(XNAT, scan_resources, data_type, scan_file, bids_res_path, scan_type, project, LOGGER):
+def create_json_sidecar(XNAT, scan_resources, data_type, scan_file, scan, bids_res_path, scan_type, project, sess, subj,
+                        LOGGER):
     """
     Method to create the json sidecars for NIFTI data
     :return:
     """
 
+    get_scan = '/projects/%s/subjects/%s/experiments/%s/scans/%s' % (project, subj,
+                                                                     sess, scan.split('-x-')[0])
     if scan_resources == 'NIFTI' and not data_type == "unknown_bids":
-        scan = '/projects/%s/subjects/%s/experiments/%s/scans/%s' % (project, scan_file.split('-x-')[1],
-                                                                     scan_file.split('-x-')[2],
-                                                                     scan_file.split('-x-')[3].split('.')[0])
-        scan_info = XNAT.select(scan)
-        xnat_prov = {"XNATfilename": scan_file,
-                     "XNATProvenance": XNAT.host + scan_info._uri}
-        if data_type == 'func':
-            img = nib.load(bids_res_path)
-            TR_zoom = img.header.get_zooms()[3]
-            tk_dict = sd_tasktype_mapping(XNAT, project)
-            task_type = tk_dict.get(scan_type)
-            tr_dict = sd_tr_mapping(XNAT, project, LOGGER)
-            TR = tr_dict.get(scan_type)
-            if TR_zoom != TR:
-                LOGGER.warn("The TR in the mapping does not match with NIFTI header")
+        res_files = XNAT.select(get_scan + '/resources/NIFTI/files').get()
+        is_json_present = False
+        for res in res_files:
+            if not res.endswith('.json'):
+                continue
+            else:
+                is_json_present = True
+        if not is_json_present:
+            scan_info = XNAT.select(get_scan)
             xnat_prov = {"XNATfilename": scan_file,
-                         "XNATProvenance": XNAT.host + scan_info._uri,
-                         "TaskName": task_type,
-                         "RepetitionTime": float(TR)}
-        with open(os.path.join(bids_res_path.split('.')[0] + ".json"), "w+") as f:
-            json.dump(xnat_prov, f, indent=2)
+                         "XNATProvenance": XNAT.host + scan_info._uri}
+            if data_type == 'func':
+                img = nib.load(bids_res_path)
+                TR_zoom = img.header.get_zooms()[3]
+                tk_dict = sd_tasktype_mapping(XNAT, project)
+                task_type = tk_dict.get(scan_type)
+                tr_dict = sd_tr_mapping(XNAT, project, LOGGER)
+                TR = tr_dict.get(scan_type)
+                if TR_zoom != TR:
+                    LOGGER.warn('''******* vvv WARNING vvv ************
+                    The NIFTI TR for does not match TR at project level
+                    ******* ^^^ WARNING ^^^ *************''')
+                xnat_prov = {"XNATfilename": scan_file,
+                             "XNATProvenance": XNAT.host + scan_info._uri,
+                             "TaskName": task_type,
+                             "RepetitionTime": float(TR)}
+            with open(os.path.join(bids_res_path.split('.')[0] + ".json"), "w+") as f:
+                json.dump(xnat_prov, f, indent=2)
 
 
 def sd_tr_mapping(XNAT, project, LOGGER):
     tr_dict = {}
-    if XNAT.select('/data/projects/' + project + '/resources/BIDS_repetition_time').exists():
-        for res in XNAT.select('/data/projects/' + project + '/resources/BIDS_repetition_time/files').get():
+    if XNAT.select('/data/projects/' + project + '/resources/BIDS_repetition_time_sec').exists():
+        for res in XNAT.select('/data/projects/' + project + '/resources/BIDS_repetition_time_sec/files').get():
             if res.endswith('.json'):
-                with open(
-                        XNAT.select('/data/projects/' + project + '/resources/BIDS_repetition_time/files/' + res).get(),
-                        "r+") as f:
+                with open(XNAT.select(
+                        '/data/projects/' + project + '/resources/BIDS_repetition_time_sec/files/' + res).get(),
+                          "r+") as f:
                     tr_mapping = json.load(f)
                     tr_dict = tr_mapping[project]
                     tr_dict = {k.strip().replace('/', '_').replace(" ", "").replace(":", '_')
@@ -171,7 +181,7 @@ def bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT, project):
      """
     sub_name = bids_sess_path.split('/')[-2]
     ses_name = bids_sess_path.split('/')[-1]
-    scan_id = scan_file.split('-x-')[3].split('.')[0]
+    scan_id = scan.split('-x-')[0]
     st = scan.split('-x-')[1]
     tk_dict = sd_tasktype_mapping(XNAT, project)
     if data_type == "anat":
