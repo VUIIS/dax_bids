@@ -42,8 +42,10 @@ def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR, LOGGER):
                                 for scan_file in os.listdir(os.path.join(sess_path, scan, scan_resources)):
                                     if not scan_file.endswith('.json'):
                                         scan_type = scan.split('-x-')[1]
-                                        #TODO: when unknown_bids --> error
                                         data_type = sd_dict.get(scan_type, "unknown_bids")
+                                        if data_type == "unknown_bids":
+                                            LOGGER.info('ERROR: Scan type %s does not have a BIDS datatype mapping'%(scan_type))
+                                            sys.exit()
                                         if not os.path.exists(os.path.join(bids_sess_path, data_type)):
                                             os.makedirs(os.path.join(bids_sess_path, data_type))
                                         shutil.move(os.path.join(sess_path, scan, scan_resources, scan_file),
@@ -67,75 +69,85 @@ def create_json_sidecar(XNAT, scan_resources, data_type, scan_file, scan, bids_r
     scan_path = '/projects/%s/subjects/%s/experiments/%s/scans/%s' % (project, subj,
                                                                  sess, scan.split('-x-')[0])
 
-    if scan_resources == 'NIFTI' and not data_type == "unknown_bids":
-        scan_info = XNAT.select(scan_path)
-        res_path = scan_path + '/resources/NIFTI/files'
-        res_files = XNAT.select(res_path).get()
-        is_json_present = False
-        for res in res_files:
-            if not res.endswith('.json'):
-                continue
+    #Return if not NIFTI and data type is unkonwn_bids
+    if scan_resources != 'NIFTI' or data_type == "unknown_bids":
+        return
+
+    scan_info = XNAT.select(scan_path)
+    res_path = scan_path + '/resources/NIFTI/files'
+    res_files = XNAT.select(res_path).get()
+    is_json_present = False
+    for res in res_files:
+        if not res.endswith('.json'):
+            continue
+        else:
+            is_json_present = True
+    if data_type != 'func':
+        xnat_detail = {"XNATfilename": scan_file,
+                     "XNATProvenance": XNAT.host + scan_info._uri}
+        if not is_json_present:
+            xnat_prov = xnat_detail
+        else:
+            with open(XNAT.select(os.path.join(res_path, res)).get(), "r") as f:
+                xnat_prov = json.load(f)
+                xnat_prov.update(xnat_detail)
+    else:
+        xnat_prov = func_json_sidecar(XNAT, scan_file, scan, bids_res_path, scan_type, project, sess, res_path, res, is_json_present, scan_info, LOGGER)
+
+    with open(os.path.join(bids_res_path.split('.')[0] + ".json"), "w+") as f:
+        json.dump(xnat_prov, f, indent=2)
+
+def func_json_sidecar(XNAT, scan_file, scan, bids_res_path, scan_type, project, sess, res_path, res, is_json_present, scan_info, LOGGER):
+
+    xnat_prov = None
+    tr_dict = sd_tr_mapping(XNAT, project, LOGGER)
+    TR_bidsmap = float(tr_dict.get(scan_type))
+    tk_dict = sd_tasktype_mapping(XNAT, project)
+    task_type = tk_dict.get(scan_type)
+    img = nib.load(bids_res_path)
+    TR_nifti = float(img.header['pixdim'][4])
+    if not is_json_present:
+        xnat_prov = {"XNATfilename": scan_file,
+                     "XNATProvenance": XNAT.host + scan_info._uri,
+                     "TaskName": task_type}
+        if TR_nifti == TR_bidsmap:
+            LOGGER.warn(
+                'No json. The TR bids mapping (%s) is equal to TR in nifti header (%s) for scan %s in session %s. '
+                'Created json with TR in nifti header' % (TR_bidsmap, TR_nifti, scan.split('-x-')[0], sess))
+            xnat_prov["RepetitionTime"] = TR_nifti
+        else:
+            LOGGER.warn(
+                'No json. The TR bids mapping (%s) is not equal to TR in nifti header (%s) for scan %s in session %s. '
+                'Creating json with TR in bidsmapping and updating nifti header'
+                % (TR_bidsmap, TR_nifti, scan.split('-x-')[0], sess))
+            xnat_prov["RepetitionTime"] = TR_bidsmap
+            img.header['pixdim'][4] = TR_bidsmap
+            nib.save(img, bids_res_path)
+    else:
+        with open(XNAT.select(os.path.join(res_path, res)).get(), "r") as f:
+            xnat_prov = json.load(f)
+            TR_json = float(xnat_prov['RepetitionTime'])
+            xnat_detail = {"XNATfilename": scan_file,
+                           "XNATProvenance": XNAT.host + scan_info._uri}
+            # check if TR_json == TR_nifti
+            if TR_json != TR_bidsmap:
+                LOGGER.warn(
+                    'The TR bids mapping (%s) is not equal to TR in json sidecar (%s) for scan %s in session %s. '
+                    'Creating json with TR in bidsmapping and updating nifti header' % (
+                        TR_bidsmap, TR_json, scan.split('-x-')[0], sess))
+                xnat_detail['RepetitionTime'] = TR_bidsmap
+                xnat_prov.update(xnat_detail)
+                img.header['pixdim'][4] = TR_bidsmap
+                nib.save(img, bids_res_path)
             else:
-                is_json_present = True
-        if data_type != 'func':
-            if not is_json_present:
-                xnat_prov = {"XNATfilename": scan_file,
-                             "XNATProvenance": XNAT.host + scan_info._uri}
-            else:
+                LOGGER.warn(
+                    'The TR bids mapping (%s) is equal to TR in json sidecar (%s) for scan %s in session %s. '
+                    'Moving json sidecard' % (TR_bidsmap, TR_json, scan.split('-x-')[0], sess))
                 with open(XNAT.select(os.path.join(res_path, res)).get(), "r") as f:
                     xnat_prov = json.load(f)
-                    xnat_detail = {"XNATfilename": scan_file,
-                             "XNATProvenance": XNAT.host + scan_info._uri}
                     xnat_prov.update(xnat_detail)
 
-        else:
-            tr_dict = sd_tr_mapping(XNAT, project, LOGGER)
-            TR_bidsmap = float(tr_dict.get(scan_type))
-            tk_dict = sd_tasktype_mapping(XNAT, project)
-            task_type = tk_dict.get(scan_type)
-            img = nib.load(bids_res_path)
-            TR_nifti = float(img.header['pixdim'][4])
-            if not is_json_present:
-                if TR_nifti == TR_bidsmap:
-                    LOGGER.warn('No json. The TR bids mapping (%s) is equal to TR in nifti header (%s) for scan %s in session %s. '
-                                'Created json with TR in nifti header'% (TR_bidsmap,TR_nifti,scan.split('-x-')[0],sess))
-                    xnat_prov = {"XNATfilename": scan_file,
-                                 "XNATProvenance": XNAT.host + scan_info._uri,
-                                 "TaskName": task_type,
-                                 "RepetitionTime": TR_nifti}
-                else:
-                    LOGGER.warn('No json. The TR bids mapping (%s) is not equal to TR in nifti header (%s) for scan %s in session %s. '
-                                'Creating json with TR in bidsmapping and updating nifti header'
-                                % (TR_bidsmap,TR_nifti,scan.split('-x-')[0],sess))
-                    xnat_prov = {"XNATfilename": scan_file,
-                                 "XNATProvenance": XNAT.host + scan_info._uri,
-                                 "TaskName": task_type,
-                                 "RepetitionTime": TR_bidsmap}
-                    img.header['pixdim'][4] = TR_bidsmap
-                    nib.save(img,bids_res_path)
-            else:
-                with open(XNAT.select(os.path.join(res_path, res)).get(), "r") as f:
-                    xnat_prov = json.load(f)
-                    TR_json = float(xnat_prov['RepetitionTime'])
-                    #check if TR_json == TR_nifti
-                    if TR_json != TR_bidsmap:
-                        LOGGER.warn('The TR bids mapping (%s) is not equal to TR in json sidecar (%s) for scan %s in session %s. '
-                                    'Creating json with TR in bidsmapping and updating nifti header' % (
-                                    TR_bidsmap, TR_json, scan.split('-x-')[0], sess))
-                        new_TR = {'RepetitionTime': TR_bidsmap,
-                                  "XNATfilename": scan_file,
-                                  "XNATProvenance": XNAT.host + scan_info._uri}
-                        xnat_prov.update(new_TR)
-                        img.header['pixdim'][4] = TR_bidsmap
-                        nib.save(img, bids_res_path)
-                    else:
-                        with open(XNAT.select(os.path.join(res_path, res)).get(), "r") as f:
-                            xnat_prov = json.load(f)
-                            xnat_detail = {"XNATfilename": scan_file,
-                                           "XNATProvenance": XNAT.host + scan_info._uri}
-                            xnat_prov.update(xnat_detail)
-        with open(os.path.join(bids_res_path.split('.')[0] + ".json"), "w+") as f:
-            json.dump(xnat_prov, f, indent=2)
+    return xnat_prov
 
 
 def sd_tr_mapping(XNAT, project, LOGGER):
