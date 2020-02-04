@@ -101,11 +101,15 @@ def func_json_sidecar(XNAT, scan_file, scan, bids_res_path, scan_type, project, 
 
     xnat_prov = None
     tr_dict = sd_tr_mapping(XNAT, project, LOGGER)
-    TR_bidsmap = float(tr_dict.get(scan_type))
+    TR_bidsmap = round((tr_dict.get(scan_type)),3)
     tk_dict = sd_tasktype_mapping(XNAT, project)
     task_type = tk_dict.get(scan_type)
     img = nib.load(bids_res_path)
-    TR_nifti = float(img.header['pixdim'][4])
+    units = img.header.get_xyzt_units()[1]
+    if units != secs:
+        LOGGER.info('ERROR: the units in nifti header is not secs')
+        sys.exit()
+    TR_nifti = round((img.header['pixdim'][4]),3)
     if not is_json_present:
         xnat_prov = {"XNATfilename": scan_file,
                      "XNATProvenance": XNAT.host + scan_info._uri,
@@ -126,7 +130,7 @@ def func_json_sidecar(XNAT, scan_file, scan, bids_res_path, scan_type, project, 
     else:
         with open(XNAT.select(os.path.join(res_path, res)).get(), "r") as f:
             xnat_prov = json.load(f)
-            TR_json = float(xnat_prov['RepetitionTime'])
+            TR_json = round((xnat_prov['RepetitionTime']),3)
             xnat_detail = {"XNATfilename": scan_file,
                            "XNATProvenance": XNAT.host + scan_info._uri}
             # check if TR_json == TR_nifti
