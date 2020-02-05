@@ -1369,6 +1369,6 @@ scans.')
             project = OPTIONS.project
             BIDS_DIR = OPTIONS.bids_dir
         #TRANFOMR XNAT2BIDS REFACTOR
-            XnatToBids.transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR, LOGGER)
+            XnatToBids.transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR, LOGGER, SC_LIST)
 
     LOGGER.info('============================================================')
