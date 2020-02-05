@@ -101,12 +101,12 @@ def func_json_sidecar(XNAT, scan_file, scan, bids_res_path, scan_type, project, 
 
     xnat_prov = None
     tr_dict = sd_tr_mapping(XNAT, project, LOGGER)
-    TR_bidsmap = round((tr_dict.get(scan_type)),3)
+    TR_bidsmap = round(float(tr_dict.get(scan_type)),3)
     tk_dict = sd_tasktype_mapping(XNAT, project)
     task_type = tk_dict.get(scan_type)
     img = nib.load(bids_res_path)
     units = img.header.get_xyzt_units()[1]
-    if units != secs:
+    if units != 'sec':
         LOGGER.info('ERROR: the units in nifti header is not secs')
         sys.exit()
     TR_nifti = round((img.header['pixdim'][4]),3)
