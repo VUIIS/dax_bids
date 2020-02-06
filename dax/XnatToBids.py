@@ -21,7 +21,7 @@ def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR, LOGGER, SC_LIST):
      :return: None
      """
     LOGGER.info("Moving files to the BIDS folder")
-    sd_dict = sd_datatype_mapping(XNAT, project)
+    sd_dict = sd_datatype_mapping(XNAT, project, LOGGER)
     data_type_l = ["anat", "func", "fmap", "dwi", "unknown_bids"]
     subj_idx = 1
     sess_idx = 1
@@ -47,7 +47,7 @@ def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR, LOGGER, SC_LIST):
                                                 scan_type = x['scan_type']
                                         data_type = sd_dict.get(scan_type, "unknown_bids")
                                         if data_type == "unknown_bids":
-                                            LOGGER.info('ERROR: Scan type %s does not have a BIDS datatype mapping' % (
+                                            LOGGER.info('ERROR: Scan type %s does not have a BIDS datatype mapping use BidsMapping Tool' % (
                                                 scan_type))
                                             sys.exit()
                                         if not os.path.exists(os.path.join(bids_sess_path, data_type)):
@@ -115,7 +115,7 @@ def func_json_sidecar(XNAT, scan_file, scan, bids_res_path, scan_type, project, 
         LOGGER.info('ERROR: Scan type %s does not have a TR mapping' % scan_type)
         sys.exit()
     TR_bidsmap = round((float(TR_bidsmap)), 4)
-    tk_dict = sd_tasktype_mapping(XNAT, project)
+    tk_dict = sd_tasktype_mapping(XNAT, project, LOGGER)
     task_type = tk_dict.get(scan_type)
     img = nib.load(bids_res_path)
     units = img.header.get_xyzt_units()[1]
@@ -185,7 +185,7 @@ def sd_tr_mapping(XNAT, project, LOGGER):
     return tr_dict
 
 
-def sd_datatype_mapping(XNAT, project):
+def sd_datatype_mapping(XNAT, project, LOGGER):
     """
       Method to map scan type to task type for functional scans
 
@@ -206,7 +206,7 @@ def sd_datatype_mapping(XNAT, project):
                     # sd_dict = {k.strip().replace('/', '_').replace(" ", "").replace(":", '_')
                     #: v for k, v in sd_dict.items()}
     else:
-        LOGGER.info('WARNING: No BIDS datatype mapping in project %s - using default mapping' % s(project))
+        LOGGER.info('WARNING: No BIDS datatype mapping in project %s - using default mapping' % (project))
         scans_list_global = XNAT.get_project_scans('LANDMAN')
 
         for sd in scans_list_global:
@@ -258,7 +258,7 @@ def bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT, project, sca
         return bids_fname
 
     elif data_type == "func":
-        tk_dict = sd_tasktype_mapping(XNAT, project)
+        tk_dict = sd_tasktype_mapping(XNAT, project, LOGGER)
         task_type = tk_dict.get(scan_type)
         if task_type == None:
             LOGGER.info('ERROR: Scan type %s does not have a BIDS tasktype mapping' % scan_type)
@@ -286,7 +286,7 @@ def bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT, project, sca
         return bids_fname
 
 
-def sd_tasktype_mapping(XNAT, project):
+def sd_tasktype_mapping(XNAT, project, LOGGER):
     """
      Method to map scan type to task type for functional scans
 
@@ -305,7 +305,7 @@ def sd_tasktype_mapping(XNAT, project):
                     #: v for k, v in tk_dict.items()}
 
     else:
-        LOGGER.info('WARNING: No BIDS task type mapping in project %s - using default mapping' % s(project))
+        LOGGER.info('WARNING: No BIDS task type mapping in project %s - using default mapping' % (project))
         scans_list_global = XNAT.get_project_scans('LANDMAN')
         for sd in scans_list_global:
             c = re.search('rest|Resting state|Rest', sd['scan_type'], flags=re.IGNORECASE)
