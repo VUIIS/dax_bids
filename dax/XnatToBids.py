@@ -13,60 +13,73 @@ import nibabel as nib
 from xml.etree import cElementTree as ET
 
 
-def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR, LOGGER, SC_LIST):
+def transform_to_bids(XNAT, DIRECTORY, project, BIDS_DIR, LOGGER):
     """
      Method to move the data from XNAT folders to BIDS format (based on datatype) by looping through
      subjects/projects.
 
      :return: None
      """
-    LOGGER.info("Moving files to the BIDS folder")
+    LOGGER.info("------- BIDS ------")
+    LOGGER.info("INFO: Moving files to the BIDS folder...")
     sd_dict = sd_datatype_mapping(XNAT, project, LOGGER)
     data_type_l = ["anat", "func", "fmap", "dwi", "unknown_bids"]
     subj_idx = 1
     sess_idx = 1
+    project_scans = XNAT.get_project_scans(project)
     for proj in os.listdir(DIRECTORY):
         if proj == project and os.path.isdir(os.path.join(DIRECTORY, proj)):
             for subj in os.listdir(os.path.join(DIRECTORY, proj)):
                 # subj_idx = 1
                 for sess in os.listdir(os.path.join(DIRECTORY, proj, subj)):
                     sess_path = os.path.join(DIRECTORY, proj, subj, sess)
-                    if not os.path.exists(BIDS_DIR):
-                        os.mkdir(BIDS_DIR)
                     # sess_idx = 1
-                    bids_sess_path = os.path.join(BIDS_DIR, proj, 'sub-' + "{0:0=2d}".format(subj_idx),
-                                                  'ses-' + "{0:0=2d}".format(sess_idx))
                     for scan in os.listdir(sess_path):
                         if scan not in data_type_l:
                             for scan_resources in os.listdir(os.path.join(sess_path, scan)):
                                 for scan_file in os.listdir(os.path.join(sess_path, scan, scan_resources)):
                                     if not scan_file.endswith('.json'):
                                         scan_id = scan.split('-x-')[0]
-                                        for x in SC_LIST:
-                                            if x['scan_id'] == scan_id:
+                                        for x in project_scans:
+                                            if x['ID'] == scan_id and x['subject_label'] == subj:
                                                 scan_type = x['scan_type']
                                         data_type = sd_dict.get(scan_type, "unknown_bids")
                                         if data_type == "unknown_bids":
-                                            LOGGER.info('ERROR: Scan type %s does not have a BIDS datatype mapping use BidsMapping Tool' % (
+                                            LOGGER.info('ERROR: Scan type %s does not have a BIDS datatype mapping. Use BidsMapping Tool' % (
                                                 scan_type))
                                             sys.exit()
+                                        if not os.path.exists(BIDS_DIR):
+                                            os.mkdir(BIDS_DIR)
+                                        bids_sess_path = os.path.join(BIDS_DIR, proj,
+                                                                      'sub-' + "{0:0=2d}".format(subj_idx),
+                                                                      'ses-' + "{0:0=2d}".format(sess_idx))
                                         if not os.path.exists(os.path.join(bids_sess_path, data_type)):
                                             os.makedirs(os.path.join(bids_sess_path, data_type))
-                                        shutil.move(os.path.join(sess_path, scan, scan_resources, scan_file),
-                                                    os.path.join(bids_sess_path, data_type))
+
                                         bids_fname = bids_filename(bids_sess_path, data_type, scan, scan_file,
                                                                    XNAT, project, scan_type, LOGGER)
                                         bids_res_path = os.path.join(bids_sess_path, data_type, bids_fname)
-                                        os.rename(os.path.join(bids_sess_path, data_type, scan_file), bids_res_path)
+                                        #os.rename(os.path.join(bids_sess_path, data_type, scan_file), bids_res_path)
+                                        scan_res_path = os.path.join(sess_path, scan, scan_resources, scan_file)
                                         create_json_sidecar(XNAT, scan_resources, data_type, scan_file, scan,
-                                                            bids_res_path, scan_type, project, sess, subj, LOGGER)
+                                                            bids_res_path, scan_res_path, scan_type, project, sess, subj, LOGGER)
+
+                                        shutil.move(os.path.join(sess_path, scan, scan_resources, scan_file),
+                                                    os.path.join(bids_sess_path, data_type))
+                                        os.rename(os.path.join(bids_sess_path, data_type, scan_file), bids_res_path)
+                                        #bids_fname = bids_filename(bids_sess_path, data_type, scan, scan_file,
+                                        #                           XNAT, project, scan_type, LOGGER)
+                                        #bids_res_path = os.path.join(bids_sess_path, data_type, bids_fname)
+                                        #os.rename(os.path.join(bids_sess_path, data_type, scan_file), bids_res_path)
+                                        #create_json_sidecar(XNAT, scan_resources, data_type, scan_file, scan,
+                                        #                   bids_res_path, scan_type, project, sess, subj, LOGGER)
                             shutil.rmtree(os.path.join(sess_path, scan))
                     sess_idx = sess_idx + 1
                 subj_idx = subj_idx + 1
     dataset_description_file(BIDS_DIR, XNAT, project)
+    remove_xnat_dir(DIRECTORY, LOGGER)
 
-
-def create_json_sidecar(XNAT, scan_resources, data_type, scan_file, scan, bids_res_path, scan_type, project, sess, subj,
+def create_json_sidecar(XNAT, scan_resources, data_type, scan_file, scan, bids_res_path, scan_res_path, scan_type, project, sess, subj,
                         LOGGER):
     """
     Method to create the json sidecars for NIFTI data
@@ -99,67 +112,72 @@ def create_json_sidecar(XNAT, scan_resources, data_type, scan_file, scan, bids_r
                 xnat_prov = json.load(f)
                 xnat_prov.update(xnat_detail)
     else:
-        xnat_prov = func_json_sidecar(XNAT, scan_file, scan, bids_res_path, scan_type, project, sess, res_path, res,
+        xnat_prov = func_json_sidecar(XNAT, scan_file, scan, bids_res_path, scan_res_path, scan_type, project, sess, res_path, res,
                                       is_json_present, scan_info, LOGGER)
 
     with open(os.path.join(bids_res_path.split('.')[0] + ".json"), "w+") as f:
         json.dump(xnat_prov, f, indent=2)
 
 
-def func_json_sidecar(XNAT, scan_file, scan, bids_res_path, scan_type, project, sess, res_path, res, is_json_present,
+def func_json_sidecar(XNAT, scan_file, scan, bids_res_path, scan_res_path, scan_type, project, sess, res_path, res, is_json_present,
                       scan_info, LOGGER):
     xnat_prov = None
-    tr_dict = sd_tr_mapping(XNAT, project, LOGGER)
+    tr_dict = sd_tr_mapping(XNAT, project, bids_res_path, LOGGER)
     TR_bidsmap = tr_dict.get(scan_type)
     if TR_bidsmap == None:
-        LOGGER.info('ERROR: Scan type %s does not have a TR mapping' % scan_type)
+        LOGGER.info('ERROR: Scan type %s does not have a TR mapping. Func folder not created' % scan_type)
+        func_folder = os.path.dirname(bids_res_path)
+        shutil.rmtree(func_folder)
         sys.exit()
-    TR_bidsmap = round((float(TR_bidsmap)), 4)
+    TR_bidsmap = round((float(TR_bidsmap)), 3)
     tk_dict = sd_tasktype_mapping(XNAT, project, LOGGER)
     task_type = tk_dict.get(scan_type)
-    img = nib.load(bids_res_path)
+    #img = nib.load(bids_res_path)
+    img = nib.load(scan_res_path)
     units = img.header.get_xyzt_units()[1]
     if units != 'sec':
-        LOGGER.info('ERROR: the units in nifti header is not secs')
+        LOGGER.info('ERROR: the units in nifti header is not secs. Func folder not created')
+        func_folder = os.path.dirname(bids_res_path)
+        shutil.rmtree(func_folder)
         sys.exit()
-    TR_nifti = round((img.header['pixdim'][4]), 4)
+    TR_nifti = round((img.header['pixdim'][4]), 3)
     if not is_json_present:
         xnat_prov = {"XNATfilename": scan_file,
                      "XNATProvenance": XNAT.host + scan_info._uri,
                      "TaskName": task_type}
         if TR_nifti == TR_bidsmap:
             LOGGER.warn(
-                'No json. The TR bids mapping (%s) is equal to TR in nifti header (%s) for scan %s in session %s. '
-                'Created json with TR in nifti header' % (TR_bidsmap, TR_nifti, scan.split('-x-')[0], sess))
+                'No existing json. TR %.3f sec in BIDS mapping and NIFTI header. Using TR %.3f sec in nifti header'
+                'for scan %s in session %s. ' % (TR_bidsmap, scan.split('-x-')[0], sess))
             xnat_prov["RepetitionTime"] = TR_nifti
         else:
             LOGGER.warn(
-                'No json. The TR bids mapping (%s) is not equal to TR in nifti header (%s) for scan %s in session %s. '
-                'Creating json with TR in bidsmapping and updating nifti header'
-                % (TR_bidsmap, TR_nifti, scan.split('-x-')[0], sess))
+                'No existing json. WARNING: The TR is %.3f sec in project level BIDS mapping, which does not match the TR of %.3f sec in NIFTI header. '
+                'UPDATING NIFTI HEADER to match BIDS mapping TR %.3f sec for scan %s in session %s.'
+                % (TR_bidsmap, TR_nifti, TR_bidsmap, scan.split('-x-')[0], sess))
             xnat_prov["RepetitionTime"] = TR_bidsmap
             img.header['pixdim'][4] = TR_bidsmap
             nib.save(img, bids_res_path)
     else:
         with open(XNAT.select(os.path.join(res_path, res)).get(), "r") as f:
             xnat_prov = json.load(f)
-            TR_json = round((xnat_prov['RepetitionTime']), 4)
+            TR_json = round((xnat_prov['RepetitionTime']), 3)
             xnat_detail = {"XNATfilename": scan_file,
                            "XNATProvenance": XNAT.host + scan_info._uri}
             # check if TR_json == TR_nifti
             if TR_json != TR_bidsmap:
                 LOGGER.warn(
-                    'The TR bids mapping (%s) is not equal to TR in json sidecar (%s) for scan %s in session %s. '
-                    'Creating json with TR in bidsmapping and updating nifti header' % (
-                        TR_bidsmap, TR_json, scan.split('-x-')[0], sess))
+                    'JSON sidecar exists. WARNING: TR is %.3f sec in project level BIDS mapping, which does not match the TR in JSON sidecar %.3f'
+                    'UPDATING json with TR %.3f sec in BIDS mapping and UPDATING nifti header for scan %s in session %s.' % (
+                        TR_bidsmap, TR_json, TR_bidsmap, scan.split('-x-')[0], sess))
                 xnat_detail['RepetitionTime'] = TR_bidsmap
                 xnat_prov.update(xnat_detail)
                 img.header['pixdim'][4] = TR_bidsmap
                 nib.save(img, bids_res_path)
             else:
                 LOGGER.warn(
-                    'The TR bids mapping (%s) is equal to TR in json sidecar (%s) for scan %s in session %s. '
-                    'Moving json sidecard' % (TR_bidsmap, TR_json, scan.split('-x-')[0], sess))
+                    'JSON sidecar exists. TR is %.3f sec in BIDS mapping and JSON sidecar for scan %s in session %s. '
+                    'Moving json sidecar' % (TR_bidsmap, scan.split('-x-')[0], sess))
                 with open(XNAT.select(os.path.join(res_path, res)).get(), "r") as f:
                     xnat_prov = json.load(f)
                     xnat_prov.update(xnat_detail)
@@ -167,7 +185,7 @@ def func_json_sidecar(XNAT, scan_file, scan, bids_res_path, scan_type, project, 
     return xnat_prov
 
 
-def sd_tr_mapping(XNAT, project, LOGGER):
+def sd_tr_mapping(XNAT, project, bids_res_path, LOGGER):
     tr_dict = {}
     if XNAT.select('/data/projects/' + project + '/resources/BIDS_repetition_time_sec').exists():
         for res in XNAT.select('/data/projects/' + project + '/resources/BIDS_repetition_time_sec/files').get():
@@ -180,7 +198,9 @@ def sd_tr_mapping(XNAT, project, LOGGER):
                     # tr_dict = {k.strip().replace('/', '_').replace(" ", "").replace(":", '_')
                     #: v for k, v in tr_dict.items()}
     else:
-        LOGGER.error("ERROR no TR mapping at project level")
+        LOGGER.error("ERROR no TR mapping at project level. Func folder not created")
+        func_folder = os.path.dirname(bids_res_path)
+        shutil.rmtree(func_folder)
         sys.exit()
     return tr_dict
 
@@ -261,7 +281,10 @@ def bids_filename(bids_sess_path, data_type, scan, scan_file, XNAT, project, sca
         tk_dict = sd_tasktype_mapping(XNAT, project, LOGGER)
         task_type = tk_dict.get(scan_type)
         if task_type == None:
-            LOGGER.info('ERROR: Scan type %s does not have a BIDS tasktype mapping' % scan_type)
+            LOGGER.info('ERROR: Scan type %s does not have a BIDS tasktype mapping at default and project level. '
+                        'Use BidsMapping tool. Func folder not created' % scan_type)
+            func_folder = os.path.join(bids_sess_path, data_type)
+            os.rmdir(func_folder)
             sys.exit()
 
         bids_fname = sub_name + '_' + ses_name + '_task-' + task_type + '_acq-' + scan_id + '_run-01' \
@@ -341,4 +364,8 @@ def dataset_description_file(BIDS_DIR, XNAT, project):
         os.makedirs(dd_file)
     with open(os.path.join(dd_file, 'dataset_description.json'), 'w+') as f:
         json.dump(dataset_description, f, indent=2)
+
+def remove_xnat_dir(DIRECTORY, LOGGER):
+    LOGGER.info("Removing the XNAT directory")
+    shutil.rmtree(DIRECTORY)
 

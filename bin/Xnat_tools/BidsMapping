@@ -197,7 +197,7 @@ def create():
         log_new_mapping(new_mapping)
         LOGGER.info('CREATED: New mapping file %s is uploaded' % new_json_name)
     else:
-        LOGGER.info('Datatype mapping exists at project level. You can update it using --update to update it '
+        LOGGER.info('Mapping exists at project level. You can update it using --update to update it '
                     'or --replace to replace the mapping')
 
 
