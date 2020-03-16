@@ -206,7 +206,8 @@ def yaml_func_json_sidecar(XNAT, data_type, res_dir, scan_file, uri, project, sc
             xnat_prov = json.load(f)
             TR_json = round((xnat_prov['RepetitionTime']), 3)
             xnat_detail = {"XNATfilename": scan_file,
-                           "XNATProvenance": uri}
+                           "XNATProvenance": uri,
+                           "TaskName": task_type}
             if TR_json != TR_bidsmap:
                 print('\t\t>JSON sidecar exists. WARNING: TR is %.3f sec in project level BIDS mapping, which does not match the TR in JSON sidecar %.3f.\n ' \
                       '\t\tUPDATING JSON with TR %.3f sec in BIDS mapping and UPDATING NIFTI header for scan %s in session %s.' \
