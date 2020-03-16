@@ -81,7 +81,7 @@ def bids_yaml(XNAT, project, scan_id, subj, res_dir, scan_file, uri, sess, nii_f
             scan_type = x['type']
     data_type = sd_dict.get(scan_type, "unknown_bids")
     if data_type == "unknown_bids":
-        print "ERROR: Scan type %s does not have a BIDS datatype mapping at default and project level. Use BidsMapping Tool" % scan_type
+        print("ERROR: Scan type %s does not have a BIDS datatype mapping at default and project level. Use BidsMapping Tool" % scan_type)
         sys.exit()
     xnat_prov = yaml_create_json(XNAT, data_type, res_dir, scan_file, uri, project, scan_type, sess, is_json_present,
                                  nii_file, json_file)
@@ -113,8 +113,8 @@ def yaml_bids_filename(XNAT, data_type, scan_id, subj, sess, project, scan_file,
         tk_dict = sd_tasktype_mapping(XNAT, project)
         task_type = tk_dict.get(scan_type)
         if task_type == None:
-            print 'ERROR: Scan type %s does not have a BIDS tasktype mapping at default and project level ' \
-                  'Use BidsMapping tool. Func folder not created' % scan_type
+            print('ERROR: Scan type %s does not have a BIDS tasktype mapping at default and project level ' \
+                  'Use BidsMapping tool. Func folder not created' % scan_type)
             # func_folder = os.path.join(bids_sess_path, data_type)
             # os.rmdir(func_folder)
             sys.exit()
@@ -146,12 +146,12 @@ def yaml_create_json(XNAT, data_type, res_dir, scan_file, uri, project, scan_typ
         xnat_detail = {"XNATfilename": scan_file,
                        "XNATProvenance": uri}
         if not is_json_present:
-            print '\t\t>No json sidecar. Created json sidecar with xnat info.'
+            print('\t\t>No json sidecar. Created json sidecar with xnat info.')
             xnat_prov = xnat_detail
         else:
             #print os.path.join(res_dir, json_file)
             with open(os.path.join(res_dir, json_file), "r+") as f:
-                print '\t\t>Json sidecar exists. Added xnat info.'
+                print('\t\t>Json sidecar exists. Added xnat info.')
                 xnat_prov = json.load(f)
                 xnat_prov.update(xnat_detail)
                 # file.seek(0)
@@ -171,7 +171,7 @@ def yaml_func_json_sidecar(XNAT, data_type, res_dir, scan_file, uri, project, sc
     tr_dict = sd_tr_mapping(XNAT, project)
     TR_bidsmap = tr_dict.get(scan_type)
     if TR_bidsmap == None:
-        print '\t\t>ERROR: Scan type %s does not have a TR mapping' % scan_type
+        print('\t\t>ERROR: Scan type %s does not have a TR mapping' % scan_type)
         # func_folder = os.path.dirname(bids_res_path)
         # os.rmdir(func_folder)
         sys.exit()
@@ -181,7 +181,7 @@ def yaml_func_json_sidecar(XNAT, data_type, res_dir, scan_file, uri, project, sc
     img = nib.load(os.path.join(res_dir, nii_file))
     units = img.header.get_xyzt_units()[1]
     if units != 'sec':
-        print "\t\t>ERROR: the units in nifti header is not secs"
+        print("\t\t>ERROR: the units in nifti header is not secs")
         func_folder = os.path.dirname(bids_res_path)
         os.rmdir(func_folder)
         sys.exit()
@@ -191,13 +191,13 @@ def yaml_func_json_sidecar(XNAT, data_type, res_dir, scan_file, uri, project, sc
                      "XNATProvenance": uri,
                      "TaskName": task_type}
         if TR_nifti == TR_bidsmap:
-            print '\t\t>No existing json. TR %.3f sec in BIDS mapping and NIFTI header. Using TR %.3f sec in nifti header ' \
-                  'for scan file %s in session %s. ' % (TR_bidsmap, TR_bidsmap, scan_file, sess)
+            print('\t\t>No existing json. TR %.3f sec in BIDS mapping and NIFTI header. Using TR %.3f sec in nifti header ' \
+                  'for scan file %s in session %s. ' % (TR_bidsmap, TR_bidsmap, scan_file, sess))
             xnat_prov["RepetitionTime"] = TR_nifti
         else:
-            print '\t\t>No existing json. WARNING: The TR is %.3f sec in project level BIDS mapping, which does not match the TR of %.3f sec in NIFTI header.\n  ' \
+            print('\t\t>No existing json. WARNING: The TR is %.3f sec in project level BIDS mapping, which does not match the TR of %.3f sec in NIFTI header.\n  ' \
                   '\t\tUPDATING NIFTI HEADER to match BIDS mapping TR %.3f sec for scan file %s in session %s.' \
-                  % (TR_bidsmap, TR_nifti, TR_bidsmap, scan_file, sess)
+                  % (TR_bidsmap, TR_nifti, TR_bidsmap, scan_file, sess))
             xnat_prov["RepetitionTime"] = TR_bidsmap
             img.header['pixdim'][4] = TR_bidsmap
             nib.save(img, os.path.join(res_dir, nii_file))
@@ -208,17 +208,17 @@ def yaml_func_json_sidecar(XNAT, data_type, res_dir, scan_file, uri, project, sc
             xnat_detail = {"XNATfilename": scan_file,
                            "XNATProvenance": uri}
             if TR_json != TR_bidsmap:
-                print '\t\t>JSON sidecar exists. WARNING: TR is %.3f sec in project level BIDS mapping, which does not match the TR in JSON sidecar %.3f.\n ' \
+                print('\t\t>JSON sidecar exists. WARNING: TR is %.3f sec in project level BIDS mapping, which does not match the TR in JSON sidecar %.3f.\n ' \
                       '\t\tUPDATING JSON with TR %.3f sec in BIDS mapping and UPDATING NIFTI header for scan %s in session %s.' \
-                      % (TR_bidsmap, TR_json, TR_bidsmap, scan_file, sess)
+                      % (TR_bidsmap, TR_json, TR_bidsmap, scan_file, sess))
                 xnat_detail['RepetitionTime'] = TR_bidsmap
                 xnat_prov.update(xnat_detail)
                 img.header['pixdim'][4] = TR_bidsmap
                 nib.save(img, os.path.join(res_dir, nii_file))
             else:
-                print '\t\t>JSON sidecar exists. TR is %.3f sec in BIDS mapping and JSON sidecar for scan %s in session %s. ' \
+                print('\t\t>JSON sidecar exists. TR is %.3f sec in BIDS mapping and JSON sidecar for scan %s in session %s. ' \
                       'Created json sidecar with XNAT info' \
-                      % (TR_bidsmap, scan_file, sess)
+                      % (TR_bidsmap, scan_file, sess))
                 xnat_prov.update(xnat_detail)
     return xnat_prov
 
@@ -232,12 +232,12 @@ def sd_tr_mapping(XNAT, project):
                         '/data/projects/' + project + '/resources/BIDS_repetition_time_sec/files/' + res).get(),
                           "r+") as f:
                     tr_mapping = json.load(f)
-                    print '\t\t>Using BIDS Repetition Time in secs mapping in project level %s' % (project)
+                    print('\t\t>Using BIDS Repetition Time in secs mapping in project level %s' % (project))
                     tr_dict = tr_mapping[project]
                     # tr_dict = {k.strip().replace('/', '_').replace(" ", "").replace(":", '_')
                     #: v for k, v in tr_dict.items()}
     else:
-        print "\t\t>ERROR: no TR mapping at project level. Func folder not created"
+        print("\t\t>ERROR: no TR mapping at project level. Func folder not created")
         # func_folder = os.path.dirname(bids_res_path)
         # os.rmdir(func_folder)
         sys.exit()
@@ -262,11 +262,11 @@ def sd_datatype_mapping(XNAT, project):
                           "r+") as f:
                     datatype_mapping = json.load(f)
                     sd_dict = datatype_mapping[project]
-                    print '\t\t>Using BIDS datatype mapping in project level %s' % (project)
+                    print('\t\t>Using BIDS datatype mapping in project level %s' % (project))
                     # sd_dict = {k.strip().replace('/', '_').replace(" ", "").replace(":", '_')
                     #: v for k, v in sd_dict.items()}
     else:
-        print '\t\t>WARNING: No BIDS datatype mapping in project %s - using default mapping' % (project)
+        print('\t\t>WARNING: No BIDS datatype mapping in project %s - using default mapping' % (project))
         # LOGGER.info('WARNING: No BIDS datatype mapping in project %s - using default mapping' % (project))
         scans_list_global = XNAT.get_project_scans('LANDMAN')
 
@@ -319,7 +319,7 @@ def sd_tasktype_mapping(XNAT, project):
                     #: v for k, v in tk_dict.items()}
 
     else:
-        print '\t\t>WARNING: No BIDS task type mapping in project %s - using default mapping' % (project)
+        print('\t\t>WARNING: No BIDS task type mapping in project %s - using default mapping' % (project))
         scans_list_global = XNAT.get_project_scans('LANDMAN')
         for sd in scans_list_global:
             c = re.search('rest|Resting state|Rest', sd['scan_type'], flags=re.IGNORECASE)
