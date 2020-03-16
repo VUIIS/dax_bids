@@ -105,7 +105,7 @@ def bids_yaml(XNAT, project, scan_id, subj, res_dir, scan_file, uri, sess, nii_f
 
 def yaml_bids_filename(XNAT, data_type, scan_id, subj, sess, project, scan_file, scan_type):
     if data_type == "anat":
-        bids_fname = "sub-" + subj + '_' + sess + '_acq-' + scan_id + '_' + 'T1w' + \
+        bids_fname = "sub-" + subj + '_' + "ses-" + sess + '_acq-' + scan_id + '_' + 'T1w' + \
                      '.' + ".".join(scan_file.split('.')[1:])
 
         return bids_fname
