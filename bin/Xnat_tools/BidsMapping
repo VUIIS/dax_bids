@@ -236,26 +236,30 @@ def update():
                 new_mapping[project][sd] = rows['tasktype']
             elif mapping_type == 'repetition_time_sec':
                 new_mapping[project][sd] = rows['repetition_time_sec']
-    for res in XNAT.select(res_files).get():
-        if res.endswith('.json'):
-            with open(XNAT.select(os.path.join(res_files, res)).get(), "r+") as f:
-                prev_mapping = json.load(f)
-                if project in prev_mapping.keys():
-                    for k, v in new_mapping.items():
-                        if OPTIONS.update:
-                            findDiff(new_mapping, prev_mapping)
-                            prev_mapping[k].update(v)
-                        if OPTIONS.replace:
-                            findDiff_change(new_mapping, prev_mapping)
-                            prev_mapping = new_mapping
+    if len(XNAT.select(res_files).get()) > 1:
+        for res in XNAT.select(res_files).get():
+            if res.endswith('.json'):
+                with open(XNAT.select(os.path.join(res_files, res)).get(dest=os.path.join("/tmp",res)), "r+") as f:
+                    prev_mapping = json.load(f)
+                    if project in prev_mapping.keys():
+                        for k, v in new_mapping.items():
+                            if OPTIONS.update:
+                                findDiff(new_mapping, prev_mapping)
+                                prev_mapping[k].update(v)
+                            if OPTIONS.replace:
+                                findDiff_change(new_mapping, prev_mapping)
+                                prev_mapping = new_mapping
 
-                    XNAT.select(os.path.join(res_files, new_json_name)).put(src=
-                                                                            json.dumps(prev_mapping, indent=2),
-                                                                            overwrite=True)
-                    XNAT.select(os.path.join(res_files, res)).delete()
-                    LOGGER.info('UPDATED: uploaded mapping file %s' % new_json_name)
-                else:
-                    LOGGER.error('ERROR: The mapping file format should have project as key')
+                        XNAT.select(os.path.join(res_files, new_json_name)).put(src=
+                                                                                json.dumps(prev_mapping, indent=2),
+                                                                                overwrite=True)
+                        XNAT.select(os.path.join(res_files, res)).delete()
+                        os.remove(os.path.join("/tmp",res))
+                        LOGGER.info('UPDATED: uploaded mapping file %s' % new_json_name)
+                    else:
+                        LOGGER.error('ERROR: The mapping file format should have project as key')
+    else:
+        LOGGER.error('ERROR: No mapping at project level to update or replace')
 
 def csv_check(src_path):
     with open(src_path, 'r') as csvFile:
@@ -267,9 +271,9 @@ def csv_check(src_path):
                     if rows['datatype'] not in ["anat", "dwi", "func", "fmap"]:
                         LOGGER.error("ERROR in CSV unknown datatype column. Datatype should be anat, dwi, fmap or func")
                         sys.exit()
-                LOGGER.info("CSV format good")
+                LOGGER.info("CSV mapping format is good")
             else:
-                LOGGER.info("CSV format good")
+                LOGGER.info("CSV mapping format is good")
         else:
             LOGGER.error("ERROR in CSV column headers. Column headers should be datatype, tasktype or repetition_time_sec")
             sys.exit()
@@ -344,21 +348,15 @@ def findDiff_change(d1, d2, path=""):
     :param path: ""
     :return:
     """
-    for k, v in d1.iteritems():
-        if k not in d2.keys():
+    for d1_k, d1_v in d1.iteritems():
+        for k, v in d1[d1_k].iteritems():
             row4 = d_m_y, " + ", k + " : " + v
             CSVWRITER.writerow(row4)
-    for k, v in d2.iteritems():
-        if k not in d1.keys():
+    for d2_k, d2_v in d1.iteritems():
+        for k, v in d2[d2_k].iteritems():
             row5 = d_m_y, " - ", k + " : " + v
             CSVWRITER.writerow(row5)
-        else:
-            if type(d1[k]) is dict:
-                if path == "":
-                    path = k
-                else:
-                    path = path + "->" + k
-                findDiff_change(d1[k], d2[k], path)
+
 
 
 
