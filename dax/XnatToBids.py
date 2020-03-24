@@ -85,8 +85,8 @@ def bids_yaml(XNAT, project, scan_id, subj, res_dir, scan_file, uri, sess, nii_f
         sys.exit()
     xnat_prov = yaml_create_json(XNAT, data_type, res_dir, scan_file, uri, project, scan_type, sess, is_json_present,
                                  nii_file, json_file)
-    sess_idx = "{0:0=2d}".format(sess_idx)
-    subj_idx = "{0:0=2d}".format(subj_idx)
+    sess_idx = "{0:0=2d}".format(int(sess_idx))
+    subj_idx = "{0:0=2d}".format(int(subj_idx))
     bids_fname = yaml_bids_filename(XNAT, data_type, scan_id, subj, sess, project, scan_file, scan_type, sess_idx, subj_idx)
     bids_fname_json = yaml_bids_filename(XNAT, data_type, scan_id, subj, sess, project, json_file, scan_type, sess_idx, subj_idx)
     with open(os.path.join(res_dir, json_file), "w+") as f:
