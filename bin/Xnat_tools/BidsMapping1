@@ -170,7 +170,11 @@ def default():
         else:
             LOGGER.info('Datatype mapping exists at project level. You can update it using --update to update it '
                         'or --replace to replace the mapping')
+
 def check_mapping_exist():
+    """
+    Method to check if json mapping exists at Project level
+    """
     is_json_present = False
     for res in XNAT.select(res_files).get():
         if not res.endswith('.json'):
@@ -299,7 +303,6 @@ def revert():
     """
     Function to go back a mapping of a previous date/time
     using the log file at project level
-    :return:
     """
     new_json_name = d_m_y + '_' + mapping_type + '.json'
     orig_mapping = None
